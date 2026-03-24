@@ -80,19 +80,21 @@ class CodeReviewerAgent(BaseAgent):
     - 重构建议
     """
 
-    def __init__(self, name: str = "CodeReviewer", model: Optional[str] = None):
+    def __init__(self, name: str = "CodeReviewer", model: Optional[str] = None, memory=None):
         """
         初始化代码评审 Agent
 
         Args:
             name: Agent 名称
             model: 使用的模型名称
+            memory: 记忆模块
         """
         super().__init__(
             name=name,
             role="Code Reviewer",
             system_prompt=CODE_REVIEWER_PROMPT,
             model=model,
+            memory=memory,
         )
 
         # 工具实例

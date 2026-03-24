@@ -75,19 +75,21 @@ class BugFixerAgent(BaseAgent):
     - 问题闭环
     """
 
-    def __init__(self, name: str = "BugFixer", model: Optional[str] = None):
+    def __init__(self, name: str = "BugFixer", model: Optional[str] = None, memory=None):
         """
         初始化故障修复 Agent
 
         Args:
             name: Agent 名称
             model: 使用的模型名称
+            memory: 记忆模块
         """
         super().__init__(
             name=name,
             role="Bug Fixer",
             system_prompt=BUG_FIXER_PROMPT,
             model=model,
+            memory=memory,
         )
 
         # 工具实例

@@ -35,34 +35,36 @@
 
 ## 快速开始
 
-### 1. 安装依赖
+### 方式一：Python 命令行（基础版）
 
 ```bash
+# 1. 安装依赖
 pip install -r requirements.txt
-```
 
-### 2. 配置 API Key
+# 2. 配置 API Key
+# 编辑 .env 文件，设置 DEEPSEEK_API_KEY
 
-编辑 `.env` 文件：
-
-```bash
-DEEPSEEK_API_KEY=your_api_key_here
-DEEPSEEK_BASE_URL=https://api.deepseek.com
-DEFAULT_MODEL=deepseek-chat
-```
-
-### 3. 运行
-
-```bash
+# 3. 运行
 python main.py
 ```
 
-### 4. 对话示例
+### 方式二：Node.js TUI 界面（推荐）
 
+```bash
+# 1. 启动 Python 后端
+python server.py
+
+# 2. 安装 Node.js 依赖
+cd cli
+npm install
+
+# 3. 启动 TUI 界面
+node src/index.js
 ```
-👤 你：帮我创建一个 Python 项目，实现待办事项管理
 
-🤖 项目总监：好的，我来协调团队完成这个项目...
+连接远程服务器：
+```bash
+node src/index.js --host your-server-ip
 ```
 
 ## 可用命令

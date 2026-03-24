@@ -65,19 +65,21 @@ class TesterAgent(BaseAgent):
     - 输出测试报告
     """
 
-    def __init__(self, name: str = "Tester", model: Optional[str] = None):
+    def __init__(self, name: str = "Tester", model: Optional[str] = None, memory=None):
         """
         初始化测试 Agent
 
         Args:
             name: Agent 名称
             model: 使用的模型名称
+            memory: 记忆模块
         """
         super().__init__(
             name=name,
             role="Test Engineer",
             system_prompt=TESTER_PROMPT,
             model=model,
+            memory=memory,
         )
 
         # 工具实例

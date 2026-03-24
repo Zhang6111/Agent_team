@@ -44,18 +44,20 @@ class TechLeadAgent(BaseAgent):
     - 整合开发结果
     """
 
-    def __init__(self, model: Optional[str] = None):
+    def __init__(self, model: Optional[str] = None, memory=None):
         """
         初始化研发效能组长
 
         Args:
             model: 使用的模型名称
+            memory: 会话记忆实例
         """
         super().__init__(
             name="TechLead",
             role="Tech Lead",
             system_prompt=TECH_LEAD_PROMPT,
             model=model,
+            memory=memory,
         )
 
         # 下属开发组

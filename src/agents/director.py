@@ -45,18 +45,20 @@ class ProjectDirector(BaseAgent):
     - 反馈最终结果
     """
 
-    def __init__(self, model: Optional[str] = None):
+    def __init__(self, model: Optional[str] = None, memory=None):
         """
         初始化项目总监
 
         Args:
             model: 使用的模型名称，默认使用配置中的 DEFAULT_MODEL
+            memory: 会话记忆实例
         """
         super().__init__(
             name="ProjectDirector",
             role="Project Director",
             system_prompt=DIRECTOR_PROMPT,
             model=model,
+            memory=memory,
         )
 
         # 内部团队成员（后续实现）

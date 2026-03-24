@@ -71,19 +71,21 @@ class DevOpsAgent(BaseAgent):
     - CI/CD 配置
     """
 
-    def __init__(self, name: str = "DevOps", model: Optional[str] = None):
+    def __init__(self, name: str = "DevOps", model: Optional[str] = None, memory=None):
         """
         初始化运维 Agent
 
         Args:
             name: Agent 名称
             model: 使用的模型名称
+            memory: 记忆模块
         """
         super().__init__(
             name=name,
             role="DevOps Engineer",
             system_prompt=DEVOPS_PROMPT,
             model=model,
+            memory=memory,
         )
 
         # 工具实例

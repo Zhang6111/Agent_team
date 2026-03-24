@@ -1,0 +1,29 @@
+{
+  "name": "agent-team-cli",
+  "version": "1.0.0",
+  "description": "Multi-Agent Team CLI - TUI Interface",
+  "main": "src/index.js",
+  "bin": {
+    "agent-team": "./src/index.js"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node src/index.js"
+  },
+  "keywords": [
+    "agent",
+    "ai",
+    "cli",
+    "tui"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "blessed": "^0.1.81",
+    "ws": "^8.14.0",
+    "axios": "^1.6.0"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}

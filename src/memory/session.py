@@ -3,7 +3,7 @@ import uuid
 from datetime import datetime
 from typing import Optional, Any
 from pydantic import BaseModel, Field
-from langchain.memory import ConversationBufferWindowMemory
+from langchain_community.chat_message_histories import ChatMessageHistory
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 
 
@@ -35,13 +35,8 @@ class SessionMemory:
             max_turns: 最大保留对话轮数
         """
         # 对话历史记忆
-        self.memory = ConversationBufferWindowMemory(
-            memory_key="chat_history",
-            return_messages=True,
-            k=max_turns,
-            input_key="input",
-            output_key="output",
-        )
+        self.chat_history = ChatMessageHistory()
+        self.max_turns = max_turns
         
         # 当前任务上下文
         self.current_task: Optional[TaskContext] = None
@@ -65,7 +60,7 @@ class SessionMemory:
 
     def add_user_message(self, message: str) -> None:
         """添加用户消息"""
-        self.memory.chat_memory.add_user_message(message)
+        self.chat_history.add_user_message(message)
         self.raw_history.append({
             "role": "user",
             "content": message,
@@ -74,7 +69,7 @@ class SessionMemory:
 
     def add_ai_message(self, message: str) -> None:
         """添加 AI 消息"""
-        self.memory.chat_memory.add_ai_message(message)
+        self.chat_history.add_ai_message(message)
         self.raw_history.append({
             "role": "assistant",
             "content": message,
@@ -83,11 +78,11 @@ class SessionMemory:
 
     def get_history(self) -> list:
         """获取对话历史"""
-        return self.memory.chat_memory.messages
+        return self.chat_history.messages
 
     def get_history_string(self) -> str:
         """获取格式化的历史字符串"""
-        messages = self.memory.chat_memory.messages
+        messages = self.chat_history.messages
         history_str = ""
         for msg in messages[-20:]:  # 最近 20 条
             if isinstance(msg, HumanMessage):
@@ -98,7 +93,7 @@ class SessionMemory:
 
     def clear_history(self) -> None:
         """清空历史"""
-        self.memory.clear()
+        self.chat_history.clear()
         self.raw_history.clear()
 
     def start_task(self, description: str) -> TaskContext:

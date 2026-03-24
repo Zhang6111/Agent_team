@@ -75,19 +75,21 @@ class TechnicalWriterAgent(BaseAgent):
     - 用户手册编写
     """
 
-    def __init__(self, name: str = "TechnicalWriter", model: Optional[str] = None):
+    def __init__(self, name: str = "TechnicalWriter", model: Optional[str] = None, memory=None):
         """
         初始化技术文档 Agent
 
         Args:
             name: Agent 名称
             model: 使用的模型名称
+            memory: 记忆模块
         """
         super().__init__(
             name=name,
             role="Technical Writer",
             system_prompt=TECHNICAL_WRITER_PROMPT,
             model=model,
+            memory=memory,
         )
 
         # 工具实例

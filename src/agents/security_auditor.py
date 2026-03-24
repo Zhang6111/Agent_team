@@ -84,19 +84,21 @@ class SecurityAuditorAgent(BaseAgent):
     - 敏感信息检查
     """
 
-    def __init__(self, name: str = "SecurityAuditor", model: Optional[str] = None):
+    def __init__(self, name: str = "SecurityAuditor", model: Optional[str] = None, memory=None):
         """
         初始化安全审计 Agent
 
         Args:
             name: Agent 名称
             model: 使用的模型名称
+            memory: 记忆模块
         """
         super().__init__(
             name=name,
             role="Security Auditor",
             system_prompt=SECURITY_AUDITOR_PROMPT,
             model=model,
+            memory=memory,
         )
 
         # 工具实例

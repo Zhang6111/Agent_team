@@ -84,63 +84,63 @@ def init_team(director: ProjectDirector) -> None:
     print("\n🔧 正在组建团队...")
     
     # 产品设计层
-    product_manager = ProductManagerAgent()
+    product_manager = ProductManagerAgent(memory=session_memory)
     director.add_team_member("ProductManager", product_manager)
     print("   ✓ 产品经理 已就位")
     
-    ui_designer = UIDesignerAgent()
+    ui_designer = UIDesignerAgent(memory=session_memory)
     director.add_team_member("UIDesigner", ui_designer)
     print("   ✓ UI 设计师 已就位")
     
     # 架构数据层
-    architect = ArchitectAgent()
+    architect = ArchitectAgent(memory=session_memory)
     director.add_team_member("Architect", architect)
     print("   ✓ 架构师 已就位")
     
-    data_engineer = DataEngineerAgent()
+    data_engineer = DataEngineerAgent(memory=session_memory)
     director.add_team_member("DataEngineer", data_engineer)
     print("   ✓ 数据工程师 已就位")
     
     # 研发执行层
-    tech_lead = TechLeadAgent()
+    tech_lead = TechLeadAgent(memory=session_memory)
     director.add_team_member("TechLead", tech_lead)
     print("   ✓ 研发效能组长 已就位")
     
-    frontend_dev = FrontendDeveloperAgent(name="FrontendDev")
+    frontend_dev = FrontendDeveloperAgent(name="FrontendDev", memory=session_memory)
     tech_lead.add_frontend_dev("FrontendDev", frontend_dev)
     print("   ✓ 前端开发 已就位")
     
-    backend_dev = BackendDeveloperAgent(name="BackendDev")
+    backend_dev = BackendDeveloperAgent(name="BackendDev", memory=session_memory)
     tech_lead.add_backend_dev("BackendDev", backend_dev)
     print("   ✓ 后端开发 已就位")
     
-    code_reviewer = CodeReviewerAgent()
+    code_reviewer = CodeReviewerAgent(memory=session_memory)
     director.add_team_member("CodeReviewer", code_reviewer)
     print("   ✓ 代码评审 已就位")
     
     # 质量保障层
-    tester = TesterAgent()
+    tester = TesterAgent(memory=session_memory)
     director.add_team_member("Tester", tester)
     print("   ✓ 测试工程师 已就位")
     
-    bug_fixer = BugFixerAgent()
+    bug_fixer = BugFixerAgent(memory=session_memory)
     director.add_team_member("BugFixer", bug_fixer)
     print("   ✓ 故障修复 已就位")
     
-    security_auditor = SecurityAuditorAgent()
+    security_auditor = SecurityAuditorAgent(memory=session_memory)
     director.add_team_member("SecurityAuditor", security_auditor)
     print("   ✓ 安全审计 已就位")
     
-    performance_optimizer = PerformanceOptimizerAgent()
+    performance_optimizer = PerformanceOptimizerAgent(memory=session_memory)
     director.add_team_member("PerformanceOptimizer", performance_optimizer)
     print("   ✓ 性能优化 已就位")
     
     # 工程交付层
-    devops = DevOpsAgent()
+    devops = DevOpsAgent(memory=session_memory)
     director.add_team_member("DevOps", devops)
     print("   ✓ 运维工程师 已就位")
     
-    technical_writer = TechnicalWriterAgent()
+    technical_writer = TechnicalWriterAgent(memory=session_memory)
     director.add_team_member("TechnicalWriter", technical_writer)
     print("   ✓ 技术文档 已就位")
     

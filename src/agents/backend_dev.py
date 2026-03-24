@@ -43,19 +43,21 @@ class BackendDeveloperAgent(BaseAgent):
     - 编写 API 代码
     """
 
-    def __init__(self, name: str = "BackendDev", model: Optional[str] = None):
+    def __init__(self, name: str = "BackendDev", model: Optional[str] = None, memory=None):
         """
         初始化后端开发
 
         Args:
             name: Agent 名称
             model: 使用的模型名称
+            memory: 记忆模块
         """
         super().__init__(
             name=name,
             role="Backend Developer",
             system_prompt=BACKEND_DEV_PROMPT,
             model=model,
+            memory=memory,
         )
 
         # 工具实例

@@ -88,19 +88,21 @@ class ArchitectAgent(BaseAgent):
     - 技术选型
     """
 
-    def __init__(self, name: str = "Architect", model: Optional[str] = None):
+    def __init__(self, name: str = "Architect", model: Optional[str] = None, memory=None):
         """
         初始化架构师 Agent
 
         Args:
             name: Agent 名称
             model: 使用的模型名称
+            memory: 记忆模块
         """
         super().__init__(
             name=name,
             role="Software Architect",
             system_prompt=ARCHITECT_PROMPT,
             model=model,
+            memory=memory,
         )
 
         # 工具实例

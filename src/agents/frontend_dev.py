@@ -41,19 +41,21 @@ class FrontendDeveloperAgent(BaseAgent):
     - 编写 HTML/CSS/JavaScript 代码
     """
 
-    def __init__(self, name: str = "FrontendDev", model: Optional[str] = None):
+    def __init__(self, name: str = "FrontendDev", model: Optional[str] = None, memory=None):
         """
         初始化前端开发
 
         Args:
             name: Agent 名称
             model: 使用的模型名称
+            memory: 记忆模块
         """
         super().__init__(
             name=name,
             role="Frontend Developer",
             system_prompt=FRONTEND_DEV_PROMPT,
             model=model,
+            memory=memory,
         )
 
         # 工具实例
