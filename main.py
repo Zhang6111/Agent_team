@@ -15,6 +15,13 @@ from src.agents import (
     ArchitectAgent,
     TesterAgent,
     DevOpsAgent,
+    UIDesignerAgent,
+    DataEngineerAgent,
+    CodeReviewerAgent,
+    BugFixerAgent,
+    SecurityAuditorAgent,
+    PerformanceOptimizerAgent,
+    TechnicalWriterAgent,
 )
 from src.mcp import message_bus
 from src.config import settings
@@ -27,13 +34,27 @@ def print_banner():
     print("=" * 60)
     print("\n👋 你好，我是项目总监，负责协调团队完成你的项目。")
     print("\n📋 团队成员：")
-    print("   - 产品经理：需求分析、PRD 输出")
-    print("   - 架构师：技术架构设计")
-    print("   - 研发效能组长：统筹开发任务")
-    print("   - 前端开发工程师：实现页面和交互")
-    print("   - 后端开发工程师：实现接口和逻辑")
-    print("   - 测试工程师：功能测试、Bug 发现")
-    print("   - 运维工程师：部署配置、Docker")
+    print("   【总控调度层】")
+    print("     - 项目总监：用户需求接口、任务分发")
+    print("   【产品设计层】")
+    print("     - 产品经理：需求分析、PRD 输出")
+    print("     - UI 设计师：页面布局、样式规范")
+    print("   【架构数据层】")
+    print("     - 架构师：技术架构设计")
+    print("     - 数据工程师：数据库设计")
+    print("   【研发执行层】")
+    print("     - 研发效能组长：统筹开发任务")
+    print("     - 前端开发：页面实现")
+    print("     - 后端开发：接口实现")
+    print("     - 代码评审：代码审查")
+    print("   【质量保障层】")
+    print("     - 测试工程师：功能测试")
+    print("     - 故障修复：Bug 修复")
+    print("     - 安全审计：漏洞扫描")
+    print("     - 性能优化：性能调优")
+    print("   【工程交付层】")
+    print("     - 运维工程师：部署配置")
+    print("     - 技术文档：文档生成")
     print("\n💬 输入你的需求，我会帮你分析并完成。")
     print("\n命令：")
     print("  /help  - 显示帮助")
@@ -61,42 +82,68 @@ def init_team(director: ProjectDirector) -> None:
     """初始化团队"""
     print("\n🔧 正在组建团队...")
     
-    # 创建产品经理
+    # 产品设计层
     product_manager = ProductManagerAgent()
     director.add_team_member("ProductManager", product_manager)
     print("   ✓ 产品经理 已就位")
     
-    # 创建架构师
+    ui_designer = UIDesignerAgent()
+    director.add_team_member("UIDesigner", ui_designer)
+    print("   ✓ UI 设计师 已就位")
+    
+    # 架构数据层
     architect = ArchitectAgent()
     director.add_team_member("Architect", architect)
     print("   ✓ 架构师 已就位")
     
-    # 创建研发效能组长
+    data_engineer = DataEngineerAgent()
+    director.add_team_member("DataEngineer", data_engineer)
+    print("   ✓ 数据工程师 已就位")
+    
+    # 研发执行层
     tech_lead = TechLeadAgent()
     director.add_team_member("TechLead", tech_lead)
     print("   ✓ 研发效能组长 已就位")
     
-    # 创建前端开发
     frontend_dev = FrontendDeveloperAgent(name="FrontendDev")
     tech_lead.add_frontend_dev("FrontendDev", frontend_dev)
-    print("   ✓ 前端开发工程师 已就位")
+    print("   ✓ 前端开发 已就位")
     
-    # 创建后端开发
     backend_dev = BackendDeveloperAgent(name="BackendDev")
     tech_lead.add_backend_dev("BackendDev", backend_dev)
-    print("   ✓ 后端开发工程师 已就位")
+    print("   ✓ 后端开发 已就位")
     
-    # 创建测试工程师
+    code_reviewer = CodeReviewerAgent()
+    director.add_team_member("CodeReviewer", code_reviewer)
+    print("   ✓ 代码评审 已就位")
+    
+    # 质量保障层
     tester = TesterAgent()
     director.add_team_member("Tester", tester)
     print("   ✓ 测试工程师 已就位")
     
-    # 创建运维工程师
+    bug_fixer = BugFixerAgent()
+    director.add_team_member("BugFixer", bug_fixer)
+    print("   ✓ 故障修复 已就位")
+    
+    security_auditor = SecurityAuditorAgent()
+    director.add_team_member("SecurityAuditor", security_auditor)
+    print("   ✓ 安全审计 已就位")
+    
+    performance_optimizer = PerformanceOptimizerAgent()
+    director.add_team_member("PerformanceOptimizer", performance_optimizer)
+    print("   ✓ 性能优化 已就位")
+    
+    # 工程交付层
     devops = DevOpsAgent()
     director.add_team_member("DevOps", devops)
     print("   ✓ 运维工程师 已就位")
     
-    print("\n✅ 团队组建完成！\n")
+    technical_writer = TechnicalWriterAgent()
+    director.add_team_member("TechnicalWriter", technical_writer)
+    print("   ✓ 技术文档 已就位")
+    
+    print("\n✅ 团队组建完成！共 15 名成员\n")
 
 
 async def run_message_bus():

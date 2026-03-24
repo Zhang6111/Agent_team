@@ -10,26 +10,27 @@
 
 产品设计层
 ├── 产品经理 (ProductManagerAgent) - 需求分析、PRD 输出
-└── UI 设计 Agent (待实现)
+└── UI 设计师 (UIDesignerAgent) - 页面布局、样式规范
 
 架构数据层
 ├── 架构师 (ArchitectAgent) - 技术架构设计
-└── 数据工程师 Agent (待实现)
+└── 数据工程师 (DataEngineerAgent) - 数据库设计
 
 研发执行层
 ├── 研发效能组长 (TechLeadAgent) - 统筹开发任务
-├── 前端开发组 (FrontendDeveloperAgent) - 前端实现
-└── 后端开发组 (BackendDeveloperAgent) - 后端实现
+├── 前端开发 (FrontendDeveloperAgent) - 前端实现
+├── 后端开发 (BackendDeveloperAgent) - 后端实现
+└── 代码评审 (CodeReviewerAgent) - 代码审查
 
 质量保障层
 ├── 测试工程师 (TesterAgent) - 功能测试、Bug 发现
-├── 故障修复 Agent (待实现)
-├── 安全审计 Agent (待实现)
-└── 性能优化 Agent (待实现)
+├── 故障修复 (BugFixerAgent) - Bug 修复
+├── 安全审计 (SecurityAuditorAgent) - 漏洞扫描
+└── 性能优化 (PerformanceOptimizerAgent) - 性能调优
 
 工程交付层
 ├── 运维工程师 (DevOpsAgent) - 部署配置、Docker
-└── 技术文档 Agent (待实现)
+└── 技术文档 (TechnicalWriterAgent) - 文档生成
 ```
 
 ## 快速开始
@@ -125,14 +126,12 @@ Agent 之间通过 MCP (Model Context Protocol) 进行通信：
 
 ## 后续计划
 
-- [ ] UI 设计 Agent
-- [ ] 数据工程师 Agent
-- [ ] 故障修复 Agent
-- [ ] 安全审计 Agent
-- [ ] 性能优化 Agent
-- [ ] 技术文档 Agent
-- [ ] 代码评审 Agent
-- [ ] 多实例开发组（前后端多 Agent 并行）
+- [ ] 多实例开发组（前后端多 Agent 并行开发）
+- [ ] 更强大的 MCP 通信（持久化、消息路由）
+- [ ] Agent 记忆系统（长期记忆、上下文管理）
+- [ ] 工具增强（更多内置工具）
+- [ ] Web UI 界面
+- [ ] API 服务模式
 
 ## License
 
