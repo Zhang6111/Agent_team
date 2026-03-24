@@ -58,24 +58,35 @@ class CLIExecutor:
             操作列表
         """
         actions = []
-        
-        # 尝试提取 JSON
+
         try:
-            # 查找 JSON 块
+            # 尝试提取 ```json 包裹的内容
             if "```json" in response:
                 start = response.index("```json") + 7
                 end = response.index("```", start)
                 json_str = response[start:end].strip()
                 data = json.loads(json_str)
                 actions = data.get("actions", [])
+            # 尝试提取 ``` 包裹的内容（没有 json 标记）
+            elif "```" in response:
+                starts = [i for i, c in enumerate(response) if response[i:i+3] == "```"]
+                if len(starts) >= 2:
+                    json_str = response[starts[0]+3:starts[1]].strip()
+                    # 尝试解析为 JSON
+                    try:
+                        data = json.loads(json_str)
+                        if isinstance(data, dict) and "actions" in data:
+                            actions = data.get("actions", [])
+                    except:
+                        pass
+            # 尝试直接解析整个响应为 JSON
             elif response.strip().startswith("{"):
-                # 直接是 JSON
-                data = json.loads(response)
+                data = json.loads(response.strip())
                 actions = data.get("actions", [])
-        except (json.JSONDecodeError, ValueError):
-            # 不是 JSON 格式，返回原始消息
-            actions = [{"type": "message", "content": response}]
-        
+        except (json.JSONDecodeError, ValueError, IndexError) as e:
+            # 解析失败，返回空列表
+            pass
+
         return actions
 
     def execute_action(

@@ -70,6 +70,11 @@ function clear() {
 
 // ==================== 打印 Logo ====================
 
+const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+});
+
 function printLogo() {
     const logo = `
 ${c('  ███╗   ███╗ █████╗  ██████╗██████╗ ██╗██████╗ ', 'cyan')}
@@ -160,20 +165,32 @@ function connectWebSocket() {
     });
 }
 
+// ==================== 询问用户 ====================
+
+function askQuestion(question) {
+    return new Promise(resolve => {
+        rl.question(question, answer => {
+            resolve(answer);
+        });
+    });
+}
+
 // ==================== HTTP API 调用 ====================
 
 let isWaiting = false;
-const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-});
 
 async function sendMessage(message) {
     if (isWaiting) return;
     isWaiting = true;
     
     try {
-        printMessage('user', message);
+        // 显示用户消息
+        console.log(c('> ', 'green') + message);
+        console.log();
+        
+        // 显示思考状态
+        console.log(c('┌─ 任务分析 ──────────────────────────────────────────────', 'cyan'));
+        console.log(c('│', 'cyan') + c(' 正在分析需求...', 'gray'));
         
         const response = await axios.post(`${apiUrl}/chat`, {
             message: message,
@@ -182,19 +199,88 @@ async function sendMessage(message) {
         
         const { message: reply, actions } = response.data;
         
-        if (actions && actions.length > 0) {
-            actions.forEach(action => {
-                if (action.type === 'create_file') {
-                    printMessage('action', `创建文件：${action.path}`);
-                    printMessage('success', `已创建 ${action.path}`);
-                } else if (action.type === 'run_command') {
-                    printMessage('action', `运行命令：${action.command}`);
-                }
-            });
+        // 从回复中提取纯文字说明（去除 JSON 部分）
+        let textMessage = reply;
+        if (reply.includes('```json')) {
+            textMessage = reply.split('```json')[0].trim();
         }
         
-        if (reply) {
-            printMessage('assistant', reply);
+        // 显示 Agent 的思考过程
+        const thoughtLines = textMessage.split('\n').filter(line => {
+            return line.length > 0 && !line.startsWith('```') && !line.startsWith('{');
+        });
+        
+        if (thoughtLines.length > 0) {
+            thoughtLines.forEach(line => {
+                console.log(c('│', 'cyan') + `  ${line}`);
+            });
+        } else {
+            console.log(c('│', 'cyan') + c('  正在理解需求...', 'gray'));
+            console.log(c('│', 'cyan') + c('  正在制定执行计划...', 'gray'));
+        }
+        
+        console.log(c('└────────────────────────────────────────────────────────────', 'cyan'));
+        console.log();
+
+        // 执行操作指令
+        if (actions && actions.length > 0) {
+            console.log(c('📋 执行操作:', 'cyan'));
+            
+            for (const action of actions) {
+                if (action.type === 'create_file') {
+                    console.log(c(`   ◐ 创建文件：${action.path}`, 'gray'));
+                    
+                    try {
+                        await axios.post(`${apiUrl}/execute`, {
+                            message: JSON.stringify({ actions: [action] }),
+                            work_dir: workDir,
+                        });
+                        readline.moveCursor(process.stdout, 0, -1);
+                        readline.clearLine(process.stdout, 0);
+                        console.log(c(`   ✅ ${action.path}`, 'green'));
+                    } catch (err) {
+                        readline.moveCursor(process.stdout, 0, -1);
+                        readline.clearLine(process.stdout, 0);
+                        console.log(c(`   ❌ 创建失败`, 'red'));
+                    }
+                    
+                } else if (action.type === 'run_command') {
+                    console.log(c(`   ◐ 运行命令：${action.command}`, 'gray'));
+                    
+                    const confirmed = await askQuestion(c(`      是否执行？(y/n): `, 'yellow'));
+                    if (confirmed.toLowerCase() === 'y') {
+                        try {
+                            await axios.post(`${apiUrl}/execute`, {
+                                message: JSON.stringify({ actions: [action] }),
+                                work_dir: workDir,
+                            });
+                            readline.moveCursor(process.stdout, 0, -1);
+                            readline.clearLine(process.stdout, 0);
+                            console.log(c(`   ✅ 命令已完成`, 'green'));
+                        } catch (err) {
+                            readline.moveCursor(process.stdout, 0, -1);
+                            readline.clearLine(process.stdout, 0);
+                            console.log(c(`   ❌ 执行失败`, 'red'));
+                        }
+                    } else {
+                        readline.moveCursor(process.stdout, 0, -1);
+                        readline.clearLine(process.stdout, 0);
+                        console.log(c(`   ⓧ 已取消`, 'gray'));
+                    }
+                }
+            }
+            console.log();
+        } else {
+            // 没有操作指令，显示文字回复
+            if (textMessage.trim()) {
+                console.log(c('🤖 Agent:', 'cyan'));
+                textMessage.split('\n').forEach(line => {
+                    if (line.trim() && !line.includes('json')) {
+                        console.log(`  ${line}`);
+                    }
+                });
+                console.log();
+            }
         }
         
     } catch (error) {
@@ -212,6 +298,7 @@ async function sendMessage(message) {
 // ==================== 显示输入提示 ====================
 
 function showPrompt() {
+    console.log();
     rl.question(c('> ', 'green'), handleInput);
 }
 

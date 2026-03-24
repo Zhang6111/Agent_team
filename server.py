@@ -224,11 +224,11 @@ async def chat(request: ChatRequest):
 
 【任务】{request.message}
 
-请在该目录下执行任务。如果需要创建文件，请指定完整路径。"""
+请在该目录下执行任务。如果需要创建文件，请输出 JSON 格式的操作指令。"""
         
         response = director.invoke(context_message)
         
-        # 解析响应中的操作指令
+        # 解析响应中的操作指令 - 提取 JSON
         from src.cli.executor import CLIExecutor
         executor = CLIExecutor(base_dir=work_dir)
         actions = executor.parse_agent_response(response)
@@ -300,19 +300,39 @@ async def execute_actions(request: ChatRequest):
     
     解析 Agent 响应并执行文件操作/命令
     """
+    import json as json_lib
+    
     work_dir = request.work_dir or os.getcwd()
     
     from src.cli.executor import CLIExecutor
     executor = CLIExecutor(base_dir=work_dir)
     
-    # 解析操作指令
-    actions = executor.parse_agent_response(request.message)
+    # 解析操作指令 - 支持两种格式
+    actions = []
+    try:
+        # 尝试解析 JSON 字符串
+        if isinstance(request.message, str):
+            data = json_lib.loads(request.message)
+            if isinstance(data, dict):
+                actions = data.get("actions", [])
+            elif isinstance(data, list):
+                actions = data
+    except (json_lib.JSONDecodeError, ValueError):
+        # 不是 JSON，尝试用解析器
+        actions = executor.parse_agent_response(request.message)
     
     if not actions:
         return {"status": "no_actions", "message": "未找到操作指令"}
     
     # 执行操作
-    results = executor.execute_actions(actions, auto_confirm=False)
+    results = []
+    for action in actions:
+        success, result = executor.execute_action(action, auto_confirm=True)
+        results.append({
+            "type": action.get("type"),
+            "success": success,
+            "result": str(result),
+        })
     
     return {
         "status": "completed",
