@@ -1,21 +1,32 @@
 """多 Agent 团队 - 项目总监命令行工具"""
 import sys
 import os
+import asyncio
 
 # 添加项目根目录到路径
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.agents import ProjectDirector
+from src.agents import (
+    ProjectDirector,
+    TechLeadAgent,
+    FrontendDeveloperAgent,
+    BackendDeveloperAgent,
+)
+from src.mcp import message_bus
 from src.config import settings
 
 
 def print_banner():
     """打印欢迎横幅"""
     print("\n" + "=" * 60)
-    print("  多 Agent 开发团队 - 项目总监")
+    print("  多 Agent 开发团队")
     print("=" * 60)
-    print("\n你好，我是项目总监，负责协调团队完成你的项目。")
-    print("输入你的需求，我会帮你分析并完成。")
+    print("\n👋 你好，我是项目总监，负责协调团队完成你的项目。")
+    print("\n📋 团队成员：")
+    print("   - 研发效能组长：统筹开发任务")
+    print("   - 前端开发工程师：实现页面和交互")
+    print("   - 后端开发工程师：实现接口和逻辑")
+    print("\n💬 输入你的需求，我会帮你分析并完成。")
     print("\n命令：")
     print("  /help  - 显示帮助")
     print("  /exit  - 退出程序")
@@ -24,15 +35,44 @@ def print_banner():
 
 def print_help():
     """打印帮助信息"""
-    print("\n可用命令：")
+    print("\n📖 可用命令：")
     print("  /help   - 显示此帮助信息")
     print("  /exit   - 退出程序")
-    print("\n如何提问：")
+    print("  /team   - 查看团队成员")
+    print("\n💡 如何提问：")
     print("  直接输入你的需求即可，例如：")
     print("  - '帮我创建一个 Python 项目，实现待办事项管理'")
     print("  - '分析一下这个需求：做一个电商网站'")
     print("  - '帮我写一个快速排序算法'")
+    print("  - '创建一个简单的登录页面'")
     print()
+
+
+def init_team(director: ProjectDirector) -> None:
+    """初始化团队"""
+    print("\n🔧 正在组建团队...")
+    
+    # 创建研发效能组长
+    tech_lead = TechLeadAgent()
+    director.add_team_member("TechLead", tech_lead)
+    print("   ✓ 研发效能组长 已就位")
+    
+    # 创建前端开发
+    frontend_dev = FrontendDeveloperAgent(name="FrontendDev")
+    tech_lead.add_frontend_dev("FrontendDev", frontend_dev)
+    print("   ✓ 前端开发工程师 已就位")
+    
+    # 创建后端开发
+    backend_dev = BackendDeveloperAgent(name="BackendDev")
+    tech_lead.add_backend_dev("BackendDev", backend_dev)
+    print("   ✓ 后端开发工程师 已就位")
+    
+    print("\n✅ 团队组建完成！\n")
+
+
+async def run_message_bus():
+    """运行消息总线"""
+    await message_bus.run()
 
 
 def main():
@@ -47,9 +87,15 @@ def main():
 
     # 创建项目总监
     director = ProjectDirector()
+    
+    # 初始化团队
+    init_team(director)
 
     # 打印欢迎信息
     print_banner()
+
+    # 启动消息总线（后台运行）
+    # asyncio.create_task(run_message_bus())
 
     # 对话循环
     while True:
@@ -68,8 +114,11 @@ def main():
                 elif cmd == "/help":
                     print_help()
                     continue
+                elif cmd == "/team":
+                    print(f"\n📋 团队成员：{director.team_members}")
+                    continue
                 else:
-                    print(f"\n未知命令：{user_input}，输入 /help 查看帮助")
+                    print(f"\n❓ 未知命令：{user_input}，输入 /help 查看帮助")
                     continue
 
             # 调用项目总监
