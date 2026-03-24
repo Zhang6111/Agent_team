@@ -1,13 +1,30 @@
 #!/usr/bin/env node
 
 /**
- * Multi-Agent Team CLI - 简洁版
- * 参考 Claude Code CLI 和 Qwen Code CLI 风格
+ * Multi-Agent Team CLI
+ * 纯文本简洁风格 - 使用 readline
  */
 
-const blessed = require('blessed');
 const WebSocket = require('ws');
 const axios = require('axios');
+const readline = require('readline');
+
+// ANSI 颜色代码
+const ESC = '\x1b[';
+const colors = {
+    reset: `${ESC}0m`,
+    bold: `${ESC}1m`,
+    cyan: `${ESC}96m`,
+    green: `${ESC}92m`,
+    yellow: `${ESC}93m`,
+    white: `${ESC}97m`,
+    gray: `${ESC}90m`,
+    red: `${ESC}91m`,
+};
+
+function c(text, color) {
+    return `${colors[color]}${text}${colors.reset}`;
+}
 
 // ==================== 配置 ====================
 
@@ -36,172 +53,87 @@ Multi-Agent Team CLI
   agent-team [选项]
 
 选项:
-  --host <hostname>     指定后端 API 地址 (默认：localhost)
-  --workdir <directory> 指定工作目录 (默认：当前目录)
+  --host <hostname>     指定后端 API 地址
+  --workdir <directory> 指定工作目录
   --help, -h            显示帮助
 `);
         process.exit(0);
     }
 }
 
-// ==================== 创建屏幕 ====================
+// ==================== 清屏 ====================
 
-const screen = blessed.screen({
-    smartCSR: true,
-    title: 'Agent Team',
-    fullUnicode: true,
-});
+function clear() {
+    readline.cursorTo(process.stdout, 0, 0);
+    readline.clearScreenDown(process.stdout);
+}
 
-// ==================== 主布局 ====================
+// ==================== 打印 Logo ====================
 
-// 主内容区（对话历史）
-const mainBox = blessed.box({
-    top: 0,
-    left: 0,
-    width: '100%',
-    height: '100%-3',
-    style: {
-        fg: 'white',
-        bg: 'black',
-    },
-    scrollable: true,
-    alwaysScroll: true,
-    scrollbar: {
-        ch: ' ',
-        track: {
-            bg: 'gray',
-        },
-        style: {
-            inverse: true,
-        },
-    },
-    keys: true,
-    vi: true,
-});
+function printLogo() {
+    const logo = `
+${c('  ███╗   ███╗ █████╗  ██████╗██████╗ ██╗██████╗ ', 'cyan')}
+${c('  ████╗ ████║██╔══██╗██╔════╝██╔══██╗██║██╔══██╗', 'cyan')}
+${c('  ██╔████╔██║███████║██║     ██████╔╝██║██║  ██║', 'cyan')}
+${c('  ██║╚██╔╝██║██╔══██║██║     ██╔══██╗██║██║  ██║', 'cyan')}
+${c('  ██║ ╚═╝ ██║██║  ██║╚██████╗██║  ██║██║██████╔╝', 'cyan')}
+${c('  ╚═╝     ╚═╝╚═╝  ╚═╝ ╚═════╝╚═╝  ╚═╝╚═╝╚═════╝ ', 'cyan')}
+`;
+    console.log(logo);
+}
 
-// 底部输入区
-const inputLayout = blessed.box({
-    bottom: 0,
-    left: 0,
-    width: '100%',
-    height: 3,
-    style: {
-        bg: 'black',
-    },
-});
+// ==================== 打印信息 ====================
 
-// 提示符
-const promptLabel = blessed.text({
-    parent: inputLayout,
-    top: 0,
-    left: 0,
-    width: 6,
-    content: '👤 你：',
-    style: {
-        fg: 'green',
-        bold: true,
-    },
-});
+function printInfo(connected) {
+    const status = connected ? c('● 已连接', 'green') : c('○ 连接中...', 'yellow');
+    console.log(c('  Multi-Agent Team CLI', 'white') + c('  v1.0.0', 'gray'));
+    console.log(c('  工作目录:', 'white') + ` ${workDir}`);
+    console.log(c('  后端地址:', 'white') + ` ${apiUrl}`);
+    console.log(`  ${status}`);
+    console.log();
+}
 
-// 输入框
-const inputBox = blessed.textbox({
-    parent: inputLayout,
-    top: 0,
-    left: 6,
-    width: '100%-6',
-    style: {
-        fg: 'white',
-    },
-    inputOnFocus: true,
-});
+// ==================== 打印分隔线 ====================
 
-// 状态栏
-const statusBar = blessed.box({
-    top: '100%-3',
-    left: 0,
-    width: '100%',
-    height: 1,
-    style: {
-        bg: 'blue',
-        fg: 'white',
-    },
-    content: '  按 Ctrl+C 退出 | 输入 /help 查看命令',
-});
+function printSeparator() {
+    console.log(c('────────────────────────────────────────────────────────────────────────', 'gray'));
+}
 
-// 添加元素
-screen.append(mainBox);
-screen.append(inputLayout);
-screen.append(statusBar);
+// ==================== 打印消息 ====================
 
-// ==================== 对话历史 ====================
-
-const messages = [];
-
-function addMessage(role, content) {
-    const timestamp = new Date().toLocaleTimeString();
+function printMessage(role, content) {
     let prefix = '';
     let color = 'white';
     
     switch (role) {
         case 'user':
-            prefix = '👤 你：';
-            color = 'green';
+            prefix = c('> ', 'green');
             break;
         case 'assistant':
-            prefix = '🤖 Agent:';
-            color = 'cyan';
+            prefix = c('🤖 ', 'cyan');
             break;
         case 'system':
-            prefix = 'ℹ️ ';
-            color = 'gray';
+            prefix = c('ℹ️  ', 'gray');
             break;
-        case 'agent:ProductManager':
-            prefix = '🟢 产品：';
-            color = 'yellow';
+        case 'action':
+            prefix = c('📋 ', 'yellow');
             break;
-        case 'agent:Architect':
-            prefix = '🔵 架构：';
-            color = 'blue';
+        case 'success':
+            prefix = c('✅ ', 'green');
             break;
-        case 'agent:Developer':
-            prefix = '🟡 开发：';
-            color = 'green';
+        case 'error':
+            prefix = c('❌ ', 'red');
             break;
-        case 'agent:Tester':
-            prefix = '🔴 测试：';
-            color = 'red';
-            break;
-        default:
-            prefix = `🤖 ${role}:`;
-            color = 'cyan';
     }
     
     const lines = content.split('\n');
-    const formattedLines = lines.map((line, i) => {
+    lines.forEach((line, i) => {
         if (i === 0) {
-            return `{${color} bold}${prefix}{/${color} bold} ${line}`;
+            console.log(`${prefix}${line}`);
+        } else {
+            console.log(`  ${line}`);
         }
-        return `  ${line}`;
     });
-    
-    messages.push(...formattedLines);
-    
-    // 保持最近 100 行
-    if (messages.length > 100) {
-        messages.splice(0, messages.length - 100);
-    }
-    
-    mainBox.setContent(messages.join('\n'));
-    screen.render();
-    
-    // 滚动到底部
-    mainBox.setScrollPerc(100);
-}
-
-function clearMessages() {
-    messages.length = 0;
-    mainBox.setContent('');
-    screen.render();
 }
 
 // ==================== WebSocket 连接 ====================
@@ -210,64 +142,38 @@ let ws = null;
 let isConnected = false;
 
 function connectWebSocket() {
-    ws = new WebSocket(wsUrl);
-    
-    ws.on('open', () => {
-        isConnected = true;
-        addMessage('system', `已连接到 ${apiUrl}`);
-        statusBar.setContent(`  已连接 | 工作目录：${workDir} | Ctrl+C 退出`);
-        screen.render();
+    return new Promise((resolve, reject) => {
+        ws = new WebSocket(wsUrl);
         
-        // 心跳
-        setInterval(() => {
-            if (ws.readyState === WebSocket.OPEN) {
-                ws.send('ping');
-            }
-        }, 30000);
-    });
-    
-    ws.on('message', (data) => {
-        try {
-            const message = JSON.parse(data.toString());
-            
-            if (message.type === 'status_update') {
-                // 更新 Agent 状态（可以在状态栏显示）
-                const workingAgents = message.agents.filter(a => a.status === 'working');
-                if (workingAgents.length > 0) {
-                    const names = workingAgents.map(a => a.name).join(', ');
-                    statusBar.setContent(`  工作中：${names} | Ctrl+C 退出`);
-                    screen.render();
-                }
-            }
-        } catch (e) {
-            // 忽略
-        }
-    });
-    
-    ws.on('close', () => {
-        isConnected = false;
-        addMessage('system', '连接已断开，尝试重连...');
-        statusBar.setContent(`  未连接 | Ctrl+C 退出`);
-        screen.render();
+        ws.on('open', () => {
+            isConnected = true;
+            resolve();
+        });
         
-        setTimeout(connectWebSocket, 3000);
-    });
-    
-    ws.on('error', () => {
-        // 静默错误
+        ws.on('close', () => {
+            isConnected = false;
+        });
+        
+        ws.on('error', (err) => {
+            reject(err);
+        });
     });
 }
 
 // ==================== HTTP API 调用 ====================
 
 let isWaiting = false;
+const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+});
 
 async function sendMessage(message) {
     if (isWaiting) return;
     isWaiting = true;
     
     try {
-        addMessage('user', message);
+        printMessage('user', message);
         
         const response = await axios.post(`${apiUrl}/chat`, {
             message: message,
@@ -276,99 +182,89 @@ async function sendMessage(message) {
         
         const { message: reply, actions } = response.data;
         
-        // 逐行显示响应（打字机效果）
-        await typeWriterEffect(reply);
-        
         if (actions && actions.length > 0) {
-            addMessage('system', `收到 ${actions.length} 个操作指令`);
+            actions.forEach(action => {
+                if (action.type === 'create_file') {
+                    printMessage('action', `创建文件：${action.path}`);
+                    printMessage('success', `已创建 ${action.path}`);
+                } else if (action.type === 'run_command') {
+                    printMessage('action', `运行命令：${action.command}`);
+                }
+            });
+        }
+        
+        if (reply) {
+            printMessage('assistant', reply);
         }
         
     } catch (error) {
-        if (error.response) {
-            addMessage('system', `API 错误：${error.response.status}`);
-        } else if (error.request) {
-            addMessage('system', '无法连接到后端 API');
+        if (error.code === 'ECONNREFUSED') {
+            printMessage('error', '无法连接到后端 API');
         } else {
-            addMessage('system', `错误：${error.message}`);
+            printMessage('error', `错误：${error.message}`);
         }
     } finally {
         isWaiting = false;
-        inputBox.focus();
-        screen.render();
+        showPrompt();
     }
 }
 
-// 打字机效果
-async function typeWriterEffect(text) {
-    const lines = text.split('\n');
-    let currentText = '';
-    
-    for (let i = 0; i < lines.length; i++) {
-        currentText += (i > 0 ? '\n' : '') + lines[i];
-        addMessage('assistant', currentText + '▌');
-        await sleep(30); // 每行 30ms
-    }
-    
-    // 移除光标
-    addMessage('assistant', text);
+// ==================== 显示输入提示 ====================
+
+function showPrompt() {
+    rl.question(c('> ', 'green'), handleInput);
 }
 
-function sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-// ==================== 键盘事件 ====================
-
-inputBox.on('submit', (value) => {
-    const message = value.trim();
+function handleInput(input) {
+    const message = input.trim();
     
     if (message) {
-        // 处理命令
-        if (message === '/clear' || message === '/cls') {
-            clearMessages();
-            addMessage('system', '屏幕已清空');
-        } else if (message === '/help') {
-            addMessage('system', '可用命令：/clear (清屏), /exit (退出), /status (状态)');
-        } else if (message === '/exit' || message === '/quit') {
+        if (message === '/exit' || message === '/quit' || message === '/q') {
+            console.log(c('\n👋 再见！\n', 'green'));
             process.exit(0);
-        } else if (message === '/status') {
-            addMessage('system', `工作目录：${workDir}`);
+        } else if (message === '/clear' || message === '/cls') {
+            clear();
+            printLogo();
+            printInfo(isConnected);
+            printSeparator();
+            showPrompt();
+        } else if (message === '/help') {
+            printMessage('system', '可用命令：/exit (退出), /clear (清屏)');
+            showPrompt();
         } else {
             sendMessage(message);
         }
+    } else {
+        showPrompt();
     }
-    
-    inputBox.clearValue();
-    screen.render();
-});
-
-// 全局键盘事件
-screen.key(['C-c'], () => {
-    process.exit(0);
-});
-
-screen.key(['C-l'], () => {
-    clearMessages();
-    addMessage('system', '屏幕已清空');
-});
+}
 
 // ==================== 启动 ====================
 
-addMessage('system', `Multi-Agent Team CLI`);
-addMessage('system', `工作目录：${workDir}`);
-addMessage('system', `连接地址：${apiUrl}`);
-addMessage('system', '');
-addMessage('system', '输入你的需求，按 Enter 发送...');
-addMessage('system', '');
+async function start() {
+    clear();
+    printLogo();
+    printInfo(false);
+    printSeparator();
+    
+    try {
+        await connectWebSocket();
+        printInfo(true);
+        printSeparator();
+        printMessage('system', '输入你的需求，按 Enter 发送...');
+        console.log();
+    } catch (err) {
+        printMessage('error', '无法连接到后端，请确保 server.py 正在运行');
+        console.log();
+    }
+    
+    showPrompt();
+}
 
-connectWebSocket();
-
-inputBox.focus();
-screen.render();
-
-// 错误处理
+// 处理 Ctrl+C
 process.on('SIGINT', () => {
-    screen.destroy();
-    console.log('\n👋 再见！');
+    console.log(c('\n\n👋 再见！\n', 'green'));
     process.exit(0);
 });
+
+start();
