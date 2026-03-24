@@ -25,6 +25,7 @@ from src.agents import (
 )
 from src.mcp import message_bus
 from src.config import settings
+from src.memory import session_memory
 
 
 def print_banner():
@@ -161,17 +162,14 @@ def main():
         print("\n请在 .env 文件中设置 DEEPSEEK_API_KEY")
         sys.exit(1)
 
-    # 创建项目总监
-    director = ProjectDirector()
+    # 创建项目总监（传入记忆系统）
+    director = ProjectDirector(memory=session_memory)
     
     # 初始化团队
     init_team(director)
 
     # 打印欢迎信息
     print_banner()
-
-    # 启动消息总线（后台运行）
-    # asyncio.create_task(run_message_bus())
 
     # 对话循环
     while True:
@@ -193,14 +191,34 @@ def main():
                 elif cmd == "/team":
                     print(f"\n📋 团队成员：{director.team_members}")
                     continue
+                elif cmd == "/memory":
+                    # 查看当前记忆
+                    print("\n🧠 当前记忆：")
+                    print(session_memory.get_context_summary())
+                    continue
+                elif cmd == "/clear":
+                    # 清空记忆
+                    session_memory.clear_history()
+                    print("\n🧹 记忆已清空")
+                    continue
                 else:
                     print(f"\n❓ 未知命令：{user_input}，输入 /help 查看帮助")
                     continue
+
+            # 添加到记忆
+            session_memory.add_user_message(user_input)
+            
+            # 如果是第一个消息，设为当前任务
+            if not session_memory.current_task:
+                session_memory.start_task(user_input)
 
             # 调用项目总监
             print("\n🤖 项目总监：", end="", flush=True)
             response = director.invoke(user_input)
             print(response)
+            
+            # 添加到记忆
+            session_memory.add_ai_message(response)
 
         except KeyboardInterrupt:
             print("\n\n🤖 项目总监：感谢使用，再见！\n")
