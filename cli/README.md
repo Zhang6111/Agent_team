@@ -4,36 +4,28 @@
 
 ## 安装
 
-### 1. 安装 Node.js 依赖
+### 全局安装（推荐）
 
 ```bash
 cd cli
 npm install
+npm link
 ```
 
-### 2. 启动 Python 后端
-
+安装后，可以在任何地方运行：
 ```bash
-# 在项目根目录
-python server.py
+agent-team --help
 ```
 
-后端将在 http://localhost:8000 启动
-
-### 3. 启动 CLI
+### 本地运行
 
 ```bash
 cd cli
+npm install
 node src/index.js
 ```
 
-或者连接到远程服务器：
-
-```bash
-node src/index.js --host 192.168.1.100
-```
-
-## 界面说明
+## 使用
 
 ```
 ┌─────────────────────────────────────────────────────────┐

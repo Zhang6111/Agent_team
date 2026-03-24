@@ -1,11 +1,8 @@
 #!/usr/bin/env node
 
 /**
- * Multi-Agent Team CLI
- * 
- * 使用方法：
- *   node src/index.js              # 连接默认地址 http://localhost:8000
- *   node src/index.js --host xxx   # 连接指定地址
+ * Multi-Agent Team CLI - 简洁版
+ * 参考 Claude Code CLI 和 Qwen Code CLI 风格
  */
 
 const blessed = require('blessed');
@@ -21,27 +18,28 @@ const DEFAULT_WS_URL = 'ws://localhost:8000/ws';
 const args = process.argv.slice(2);
 let apiUrl = DEFAULT_API_URL;
 let wsUrl = DEFAULT_WS_URL;
+let workDir = process.cwd();
 
 for (let i = 0; i < args.length; i++) {
     if (args[i] === '--host' && args[i + 1]) {
         apiUrl = `http://${args[i + 1]}:8000`;
         wsUrl = `ws://${args[i + 1]}:8000/ws`;
         i++;
+    } else if (args[i] === '--workdir' && args[i + 1]) {
+        workDir = args[i + 1];
+        i++;
     } else if (args[i] === '--help' || args[i] === '-h') {
         console.log(`
 Multi-Agent Team CLI
 
 用法:
-  node src/index.js [选项]
+  agent-team [选项]
 
 选项:
-  --host <hostname>  指定后端 API 地址 (默认：localhost)
-  --help, -h         显示帮助
-
-示例:
-  node src/index.js                          # 本地连接
-  node src/index.js --host 192.168.1.100     # 连接远程服务器
-        `);
+  --host <hostname>     指定后端 API 地址 (默认：localhost)
+  --workdir <directory> 指定工作目录 (默认：当前目录)
+  --help, -h            显示帮助
+`);
         process.exit(0);
     }
 }
@@ -50,177 +48,177 @@ Multi-Agent Team CLI
 
 const screen = blessed.screen({
     smartCSR: true,
-    title: 'Multi-Agent Team CLI',
+    title: 'Agent Team',
     fullUnicode: true,
 });
 
-// ==================== 创建布局 ====================
+// ==================== 主布局 ====================
 
-// 标题栏
-const header = blessed.box({
+// 主内容区（对话历史）
+const mainBox = blessed.box({
     top: 0,
     left: 0,
     width: '100%',
-    height: 3,
-    content: '{center}🤖 Multi-Agent Team CLI{/center}',
-    tags: true,
+    height: '100%-3',
     style: {
-        fg: 'cyan',
+        fg: 'white',
         bg: 'black',
+    },
+    scrollable: true,
+    alwaysScroll: true,
+    scrollbar: {
+        ch: ' ',
+        track: {
+            bg: 'gray',
+        },
+        style: {
+            inverse: true,
+        },
+    },
+    keys: true,
+    vi: true,
+});
+
+// 底部输入区
+const inputLayout = blessed.box({
+    bottom: 0,
+    left: 0,
+    width: '100%',
+    height: 3,
+    style: {
+        bg: 'black',
+    },
+});
+
+// 提示符
+const promptLabel = blessed.text({
+    parent: inputLayout,
+    top: 0,
+    left: 0,
+    width: 6,
+    content: '👤 你：',
+    style: {
+        fg: 'green',
         bold: true,
     },
-    border: {
-        type: 'line',
-        fg: 'cyan',
-    },
 });
-
-// Agent 状态面板
-const agentPanel = blessed.box({
-    top: 3,
-    left: 0,
-    width: '40%',
-    height: '60%',
-    label: ' Agent 状态 ',
-    tags: true,
-    style: {
-        fg: 'white',
-        border: {
-            fg: 'green',
-        },
-    },
-    border: {
-        type: 'line',
-        fg: 'green',
-    },
-    content: '正在连接...',
-});
-
-// 日志面板
-const logPanel = blessed.box({
-    top: 3,
-    left: '40%',
-    width: '60%',
-    height: '60%',
-    label: ' 实时日志 ',
-    tags: true,
-    style: {
-        fg: 'white',
-        border: {
-            fg: 'blue',
-        },
-    },
-    border: {
-        type: 'line',
-        fg: 'blue',
-    },
-    content: '',
-});
-
-// 日志行集合
-const logLines = [];
-const MAX_LOG_LINES = 100;
-
-function addLog(message, type = 'info') {
-    const timestamp = new Date().toLocaleTimeString();
-    let color = 'white';
-    
-    switch (type) {
-        case 'error': color = 'red'; break;
-        case 'success': color = 'green'; break;
-        case 'warning': color = 'yellow'; break;
-        case 'agent': color = 'cyan'; break;
-    }
-    
-    const line = `{gray}[${timestamp}]{/gray} {${color}}${message}{/${color}}`;
-    logLines.push(line);
-    
-    if (logLines.length > MAX_LOG_LINES) {
-        logLines.shift();
-    }
-    
-    logPanel.setContent(logLines.join('\n'));
-    screen.render();
-}
 
 // 输入框
 const inputBox = blessed.textbox({
-    bottom: 0,
-    left: 0,
-    width: '80%',
-    height: 3,
-    label: ' 输入消息 (Enter 发送): ',
-    tags: true,
+    parent: inputLayout,
+    top: 0,
+    left: 6,
+    width: '100%-6',
     style: {
         fg: 'white',
-        label: {
-            fg: 'yellow',
-            bold: true,
-        },
-    },
-    border: {
-        type: 'line',
-        fg: 'yellow',
     },
     inputOnFocus: true,
 });
 
 // 状态栏
 const statusBar = blessed.box({
-    bottom: 0,
-    left: '80%',
-    width: '20%',
-    height: 3,
-    content: '{center}状态：{green}已连接{/green}{/center}',
-    tags: true,
-    style: {
-        fg: 'white',
-        bg: 'black',
-    },
-    border: {
-        type: 'line',
-        fg: 'gray',
-    },
-});
-
-// 帮助提示
-const helpBox = blessed.box({
-    bottom: 3,
+    top: '100%-3',
     left: 0,
     width: '100%',
     height: 1,
-    content: '{center}Ctrl+C 退出 | Ctrl+L 清屏 | /help 查看命令{/center}',
-    tags: true,
     style: {
-        fg: 'gray',
-        bg: 'black',
+        bg: 'blue',
+        fg: 'white',
     },
+    content: '  按 Ctrl+C 退出 | 输入 /help 查看命令',
 });
 
-// 添加元素到屏幕
-screen.append(header);
-screen.append(agentPanel);
-screen.append(logPanel);
-screen.append(helpBox);
-screen.append(inputBox);
+// 添加元素
+screen.append(mainBox);
+screen.append(inputLayout);
 screen.append(statusBar);
+
+// ==================== 对话历史 ====================
+
+const messages = [];
+
+function addMessage(role, content) {
+    const timestamp = new Date().toLocaleTimeString();
+    let prefix = '';
+    let color = 'white';
+    
+    switch (role) {
+        case 'user':
+            prefix = '👤 你：';
+            color = 'green';
+            break;
+        case 'assistant':
+            prefix = '🤖 Agent:';
+            color = 'cyan';
+            break;
+        case 'system':
+            prefix = 'ℹ️ ';
+            color = 'gray';
+            break;
+        case 'agent:ProductManager':
+            prefix = '🟢 产品：';
+            color = 'yellow';
+            break;
+        case 'agent:Architect':
+            prefix = '🔵 架构：';
+            color = 'blue';
+            break;
+        case 'agent:Developer':
+            prefix = '🟡 开发：';
+            color = 'green';
+            break;
+        case 'agent:Tester':
+            prefix = '🔴 测试：';
+            color = 'red';
+            break;
+        default:
+            prefix = `🤖 ${role}:`;
+            color = 'cyan';
+    }
+    
+    const lines = content.split('\n');
+    const formattedLines = lines.map((line, i) => {
+        if (i === 0) {
+            return `{${color} bold}${prefix}{/${color} bold} ${line}`;
+        }
+        return `  ${line}`;
+    });
+    
+    messages.push(...formattedLines);
+    
+    // 保持最近 100 行
+    if (messages.length > 100) {
+        messages.splice(0, messages.length - 100);
+    }
+    
+    mainBox.setContent(messages.join('\n'));
+    screen.render();
+    
+    // 滚动到底部
+    mainBox.setScrollPerc(100);
+}
+
+function clearMessages() {
+    messages.length = 0;
+    mainBox.setContent('');
+    screen.render();
+}
 
 // ==================== WebSocket 连接 ====================
 
 let ws = null;
-let agents = [];
+let isConnected = false;
 
 function connectWebSocket() {
-    addLog(`正在连接 ${wsUrl}...`, 'info');
-    
     ws = new WebSocket(wsUrl);
     
     ws.on('open', () => {
-        addLog('已连接到后端 API', 'success');
-        statusBar.setContent('{center}状态：{green}已连接{/green}{/center}');
+        isConnected = true;
+        addMessage('system', `已连接到 ${apiUrl}`);
+        statusBar.setContent(`  已连接 | 工作目录：${workDir} | Ctrl+C 退出`);
         screen.render();
         
-        // 发送心跳
+        // 心跳
         setInterval(() => {
             if (ws.readyState === WebSocket.OPEN) {
                 ws.send('ping');
@@ -233,93 +231,90 @@ function connectWebSocket() {
             const message = JSON.parse(data.toString());
             
             if (message.type === 'status_update') {
-                agents = message.agents || [];
-                updateAgentPanel();
-            } else if (message.type === 'connected') {
-                agents = message.agents || [];
-                updateAgentPanel();
+                // 更新 Agent 状态（可以在状态栏显示）
+                const workingAgents = message.agents.filter(a => a.status === 'working');
+                if (workingAgents.length > 0) {
+                    const names = workingAgents.map(a => a.name).join(', ');
+                    statusBar.setContent(`  工作中：${names} | Ctrl+C 退出`);
+                    screen.render();
+                }
             }
         } catch (e) {
-            // 忽略解析错误
+            // 忽略
         }
     });
     
     ws.on('close', () => {
-        addLog('连接已断开，尝试重连...', 'warning');
-        statusBar.setContent('{center}状态：{red}断开{/red}{/center}');
+        isConnected = false;
+        addMessage('system', '连接已断开，尝试重连...');
+        statusBar.setContent(`  未连接 | Ctrl+C 退出`);
         screen.render();
         
         setTimeout(connectWebSocket, 3000);
     });
     
-    ws.on('error', (error) => {
-        addLog(`WebSocket 错误：${error.message}`, 'error');
+    ws.on('error', () => {
+        // 静默错误
     });
-}
-
-function updateAgentPanel() {
-    if (agents.length === 0) {
-        agentPanel.setContent('没有可用的 Agent');
-        screen.render();
-        return;
-    }
-    
-    const content = agents.map(agent => {
-        let statusIcon = '⚪';
-        let statusColor = 'gray';
-        
-        switch (agent.status) {
-            case 'working':
-                statusIcon = '🟢';
-                statusColor = 'green';
-                break;
-            case 'done':
-                statusIcon = '✅';
-                statusColor = 'green';
-                break;
-            case 'error':
-                statusIcon = '❌';
-                statusColor = 'red';
-                break;
-        }
-        
-        const task = agent.current_task ? ` - ${agent.current_task.substring(0, 20)}...` : '';
-        return `{${statusColor}}${statusIcon} ${agent.name}{/${statusColor}}${task}`;
-    }).join('\n');
-    
-    agentPanel.setContent(content);
-    screen.render();
 }
 
 // ==================== HTTP API 调用 ====================
 
+let isWaiting = false;
+
 async function sendMessage(message) {
+    if (isWaiting) return;
+    isWaiting = true;
+    
     try {
-        addLog(`发送：${message}`, 'info');
+        addMessage('user', message);
         
         const response = await axios.post(`${apiUrl}/chat`, {
             message: message,
+            work_dir: workDir,
         });
         
         const { message: reply, actions } = response.data;
         
-        addLog(reply, 'agent');
+        // 逐行显示响应（打字机效果）
+        await typeWriterEffect(reply);
         
-        // 如果有操作指令，显示确认
         if (actions && actions.length > 0) {
-            addLog(`收到 ${actions.length} 个操作指令`, 'warning');
-            // 这里可以添加确认逻辑
+            addMessage('system', `收到 ${actions.length} 个操作指令`);
         }
         
     } catch (error) {
         if (error.response) {
-            addLog(`API 错误：${error.response.status}`, 'error');
+            addMessage('system', `API 错误：${error.response.status}`);
         } else if (error.request) {
-            addLog('无法连接到后端 API', 'error');
+            addMessage('system', '无法连接到后端 API');
         } else {
-            addLog(`错误：${error.message}`, 'error');
+            addMessage('system', `错误：${error.message}`);
         }
+    } finally {
+        isWaiting = false;
+        inputBox.focus();
+        screen.render();
     }
+}
+
+// 打字机效果
+async function typeWriterEffect(text) {
+    const lines = text.split('\n');
+    let currentText = '';
+    
+    for (let i = 0; i < lines.length; i++) {
+        currentText += (i > 0 ? '\n' : '') + lines[i];
+        addMessage('assistant', currentText + '▌');
+        await sleep(30); // 每行 30ms
+    }
+    
+    // 移除光标
+    addMessage('assistant', text);
+}
+
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 // ==================== 键盘事件 ====================
@@ -330,17 +325,15 @@ inputBox.on('submit', (value) => {
     if (message) {
         // 处理命令
         if (message === '/clear' || message === '/cls') {
-            logLines.length = 0;
-            logPanel.setContent('');
-            addLog('屏幕已清空', 'success');
+            clearMessages();
+            addMessage('system', '屏幕已清空');
         } else if (message === '/help') {
-            addLog('可用命令：/clear (清屏), /exit (退出), /status (状态)', 'info');
+            addMessage('system', '可用命令：/clear (清屏), /exit (退出), /status (状态)');
         } else if (message === '/exit' || message === '/quit') {
             process.exit(0);
         } else if (message === '/status') {
-            addLog(`当前有 ${agents.length} 个 Agent 在线`, 'info');
+            addMessage('system', `工作目录：${workDir}`);
         } else {
-            // 发送消息
             sendMessage(message);
         }
     }
@@ -355,28 +348,25 @@ screen.key(['C-c'], () => {
 });
 
 screen.key(['C-l'], () => {
-    logLines.length = 0;
-    logPanel.setContent('');
-    addLog('屏幕已清空', 'success');
+    clearMessages();
+    addMessage('system', '屏幕已清空');
 });
 
 // ==================== 启动 ====================
 
-addLog('正在启动 Multi-Agent Team CLI...');
-addLog(`连接地址：${apiUrl}`);
+addMessage('system', `Multi-Agent Team CLI`);
+addMessage('system', `工作目录：${workDir}`);
+addMessage('system', `连接地址：${apiUrl}`);
+addMessage('system', '');
+addMessage('system', '输入你的需求，按 Enter 发送...');
+addMessage('system', '');
+
 connectWebSocket();
 
-// 聚焦输入框
 inputBox.focus();
-
-// 渲染屏幕
 screen.render();
 
 // 错误处理
-process.on('uncaughtException', (err) => {
-    addLog(`未捕获异常：${err.message}`, 'error');
-});
-
 process.on('SIGINT', () => {
     screen.destroy();
     console.log('\n👋 再见！');

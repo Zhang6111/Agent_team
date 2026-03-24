@@ -3,6 +3,7 @@ import asyncio
 import json
 from typing import Optional, List
 from datetime import datetime
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -24,6 +25,7 @@ class ChatRequest(BaseModel):
     """聊天请求"""
     message: str
     session_id: Optional[str] = None
+    work_dir: Optional[str] = None  # 工作目录
 
 
 class ChatResponse(BaseModel):
@@ -50,21 +52,6 @@ class TeamStatus(BaseModel):
 
 # ==================== FastAPI 应用 ====================
 
-app = FastAPI(
-    title="Multi-Agent Team API",
-    description="多 Agent 开发团队后端 API",
-    version="1.0.0",
-)
-
-# CORS 配置（允许 Node.js CLI 连接）
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # 生产环境应该限制
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
 # 全局状态
 director: Optional[ProjectDirector] = None
 websocket_clients: List[WebSocket] = []
@@ -77,10 +64,10 @@ current_task: Optional[str] = None
 def init_agent_team():
     """初始化 Agent 团队"""
     global director
-    
+
     if director is None:
         director = ProjectDirector(memory=session_memory)
-        
+
         # 初始化团队成员（简化版，实际应该和 main.py 一样）
         from src.agents import (
             TechLeadAgent, FrontendDeveloperAgent, BackendDeveloperAgent,
@@ -89,7 +76,7 @@ def init_agent_team():
             BugFixerAgent, SecurityAuditorAgent, PerformanceOptimizerAgent,
             TechnicalWriterAgent,
         )
-        
+
         # 添加团队成员并初始化状态
         team_members = [
             ("ProductManager", ProductManagerAgent),
@@ -97,8 +84,8 @@ def init_agent_team():
             ("Architect", ArchitectAgent),
             ("DataEngineer", DataEngineerAgent),
             ("TechLead", TechLeadAgent),
-            ("FrontendDev", lambda: FrontendDeveloperAgent(name="FrontendDev")),
-            ("BackendDev", lambda: BackendDeveloperAgent(name="BackendDev")),
+            ("FrontendDev", FrontendDeveloperAgent),
+            ("BackendDev", BackendDeveloperAgent),
             ("CodeReviewer", CodeReviewerAgent),
             ("Tester", TesterAgent),
             ("BugFixer", BugFixerAgent),
@@ -107,9 +94,12 @@ def init_agent_team():
             ("DevOps", DevOpsAgent),
             ("TechnicalWriter", TechnicalWriterAgent),
         ]
-        
+
         for name, agent_cls in team_members:
-            agent = agent_cls(memory=session_memory)
+            if name in ["FrontendDev", "BackendDev"]:
+                agent = agent_cls(name=name, memory=session_memory)
+            else:
+                agent = agent_cls(memory=session_memory)
             director.add_team_member(name, agent)
             agent_states[name] = {
                 "name": name,
@@ -117,7 +107,7 @@ def init_agent_team():
                 "status": "idle",
                 "current_task": None,
             }
-    
+
     return director
 
 
@@ -125,21 +115,21 @@ async def broadcast_status():
     """广播状态给所有 WebSocket 客户端"""
     if not websocket_clients:
         return
-    
+
     status = {
         "type": "status_update",
         "agents": list(agent_states.values()),
         "current_task": current_task,
         "timestamp": datetime.now().isoformat(),
     }
-    
+
     disconnected = []
     for client in websocket_clients:
         try:
             await client.send_json(status)
         except:
             disconnected.append(client)
-    
+
     # 移除断开的连接
     for client in disconnected:
         websocket_clients.remove(client)
@@ -156,11 +146,32 @@ def update_agent_status(name: str, status: str, task: Optional[str] = None):
 
 # ==================== API 路由 ====================
 
-@app.on_event("startup")
-async def startup_event():
-    """启动时初始化"""
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """应用生命周期管理"""
+    # 启动时
     init_agent_team()
     print("🚀 Multi-Agent Team API 已启动")
+    yield
+    # 关闭时
+    print("👋 Multi-Agent Team API 已关闭")
+
+
+app = FastAPI(
+    title="Multi-Agent Team API",
+    description="多 Agent 开发团队后端 API",
+    version="1.0.0",
+    lifespan=lifespan,
+)
+
+# CORS 配置（允许 Node.js CLI 连接）
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # 生产环境应该限制
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.get("/")
@@ -200,21 +211,32 @@ async def chat(request: ChatRequest):
     if director is None:
         raise HTTPException(status_code=500, detail="Agent 团队未初始化")
     
+    # 确定工作目录
+    work_dir = request.work_dir or os.getcwd()
+    
     # 更新任务
     current_task = request.message
     update_agent_status("ProjectDirector", "working", request.message)
     
     try:
-        # 调用项目总监
-        response = director.invoke(request.message)
+        # 调用项目总监（带上工作目录上下文）
+        context_message = f"""【工作目录】{work_dir}
+
+【任务】{request.message}
+
+请在该目录下执行任务。如果需要创建文件，请指定完整路径。"""
+        
+        response = director.invoke(context_message)
         
         # 解析响应中的操作指令
-        actions = []
-        executor = None  # 这里可以添加 CLIExecutor 来解析
+        from src.cli.executor import CLIExecutor
+        executor = CLIExecutor(base_dir=work_dir)
+        actions = executor.parse_agent_response(response)
         
         # 更新记忆
         session_memory.add_user_message(request.message)
         session_memory.add_ai_message(response)
+        session_memory.project_info["work_dir"] = work_dir
         
         # 如果没有开始任务，启动一个
         if not session_memory.current_task:
@@ -269,6 +291,34 @@ async def confirm_task(task_id: str):
 async def cancel_task(task_id: str):
     """取消任务"""
     return {"status": "cancelled", "task_id": task_id}
+
+
+@app.post("/execute")
+async def execute_actions(request: ChatRequest):
+    """
+    执行操作指令
+    
+    解析 Agent 响应并执行文件操作/命令
+    """
+    work_dir = request.work_dir or os.getcwd()
+    
+    from src.cli.executor import CLIExecutor
+    executor = CLIExecutor(base_dir=work_dir)
+    
+    # 解析操作指令
+    actions = executor.parse_agent_response(request.message)
+    
+    if not actions:
+        return {"status": "no_actions", "message": "未找到操作指令"}
+    
+    # 执行操作
+    results = executor.execute_actions(actions, auto_confirm=False)
+    
+    return {
+        "status": "completed",
+        "results": results,
+        "summary": executor.get_execution_summary(),
+    }
 
 
 # ==================== 启动入口 ====================

@@ -4,11 +4,13 @@
   "description": "Multi-Agent Team CLI - TUI Interface",
   "main": "src/index.js",
   "bin": {
-    "agent-team": "./src/index.js"
+    "agent-team": "./src/index.js",
+    "atm": "./src/index.js"
   },
   "scripts": {
     "start": "node src/index.js",
-    "dev": "node src/index.js"
+    "dev": "node src/index.js",
+    "link": "npm link"
   },
   "keywords": [
     "agent",
