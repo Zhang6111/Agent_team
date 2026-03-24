@@ -199,6 +199,11 @@ async function sendMessage(message) {
         
         const { message: reply, actions } = response.data;
         
+        // 调试：显示原始回复（前 500 字符）
+        // console.log(c('\n[调试] Agent 原始回复:', 'gray'));
+        // console.log(c(reply.substring(0, 500), 'gray'));
+        // console.log();
+        
         // 从回复中提取纯文字说明（去除 JSON 部分）
         let textMessage = reply;
         if (reply.includes('```json')) {
