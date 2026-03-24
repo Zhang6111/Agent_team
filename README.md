@@ -1,0 +1,139 @@
+# 多 Agent 开发团队
+
+基于 LangChain 和 MCP (Model Context Protocol) 的多 Agent 协作系统，模拟完整的软件开发团队。
+
+## 团队架构
+
+```
+总控调度层
+└── 项目总监 (ProjectDirector) - 用户交互接口，协调团队
+
+产品设计层
+├── 产品经理 (ProductManagerAgent) - 需求分析、PRD 输出
+└── UI 设计 Agent (待实现)
+
+架构数据层
+├── 架构师 (ArchitectAgent) - 技术架构设计
+└── 数据工程师 Agent (待实现)
+
+研发执行层
+├── 研发效能组长 (TechLeadAgent) - 统筹开发任务
+├── 前端开发组 (FrontendDeveloperAgent) - 前端实现
+└── 后端开发组 (BackendDeveloperAgent) - 后端实现
+
+质量保障层
+├── 测试工程师 (TesterAgent) - 功能测试、Bug 发现
+├── 故障修复 Agent (待实现)
+├── 安全审计 Agent (待实现)
+└── 性能优化 Agent (待实现)
+
+工程交付层
+├── 运维工程师 (DevOpsAgent) - 部署配置、Docker
+└── 技术文档 Agent (待实现)
+```
+
+## 快速开始
+
+### 1. 安装依赖
+
+```bash
+pip install -r requirements.txt
+```
+
+### 2. 配置 API Key
+
+编辑 `.env` 文件：
+
+```bash
+DEEPSEEK_API_KEY=your_api_key_here
+DEEPSEEK_BASE_URL=https://api.deepseek.com
+DEFAULT_MODEL=deepseek-chat
+```
+
+### 3. 运行
+
+```bash
+python main.py
+```
+
+### 4. 对话示例
+
+```
+👤 你：帮我创建一个 Python 项目，实现待办事项管理
+
+🤖 项目总监：好的，我来协调团队完成这个项目...
+```
+
+## 可用命令
+
+| 命令 | 说明 |
+|------|------|
+| `/help` | 显示帮助信息 |
+| `/exit` | 退出程序 |
+| `/team` | 查看团队成员 |
+
+## 技术栈
+
+- **LangChain** - Agent 框架
+- **MCP** - Agent 间通信协议
+- **DeepSeek API** - LLM 服务
+- **Python 3.12+** - 运行环境
+
+## 项目结构
+
+```
+Agent_team/
+├── main.py                 # 主入口
+├── requirements.txt        # 依赖列表
+├── .env                    # 环境变量
+│
+├── src/
+│   ├── agents/             # Agent 定义
+│   │   ├── base_agent.py   # 基类
+│   │   ├── director.py     # 项目总监
+│   │   ├── product_manager.py
+│   │   ├── architect.py
+│   │   ├── tech_lead.py
+│   │   ├── frontend_dev.py
+│   │   ├── backend_dev.py
+│   │   ├── tester.py
+│   │   └── devops.py
+│   │
+│   ├── mcp/                # MCP 通信层
+│   │   ├── messages.py     # 消息模型
+│   │   └── bus.py          # 消息总线
+│   │
+│   ├── tools/              # 工具函数
+│   │   ├── file_tools.py   # 文件操作
+│   │   └── command_tools.py # 命令执行
+│   │
+│   └── config/             # 配置
+│       ├── settings.py     # 设置
+│       └── prompts.py      # 提示词
+│
+└── examples/               # 示例脚本
+```
+
+## MCP 通信
+
+Agent 之间通过 MCP (Model Context Protocol) 进行通信：
+
+- **MessageBus** - 消息总线，管理所有通信
+- **Message** - 消息模型，包含类型、优先级、内容
+- **TaskPayload** - 任务负载
+- **ResponsePayload** - 响应负载
+
+## 后续计划
+
+- [ ] UI 设计 Agent
+- [ ] 数据工程师 Agent
+- [ ] 故障修复 Agent
+- [ ] 安全审计 Agent
+- [ ] 性能优化 Agent
+- [ ] 技术文档 Agent
+- [ ] 代码评审 Agent
+- [ ] 多实例开发组（前后端多 Agent 并行）
+
+## License
+
+MIT
