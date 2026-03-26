@@ -155,12 +155,17 @@ class WorkflowEngine:
             if task.status != TaskStatus.PENDING:
                 continue
             deps_met = all(
-                self.tasks.get(dep_id)?.status == TaskStatus.COMPLETED
+                self._is_dependency_met(dep_id)
                 for dep_id in task.dependencies
             )
             if deps_met:
                 runnable.append(task)
         return runnable
+
+    def _is_dependency_met(self, dep_id: str) -> bool:
+        """检查依赖是否满足"""
+        dep_task = self.tasks.get(dep_id)
+        return dep_task is not None and dep_task.status == TaskStatus.COMPLETED
 
     def get_task_by_id(self, task_id: str) -> Optional[Task]:
         return self.tasks.get(task_id)
