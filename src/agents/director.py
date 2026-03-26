@@ -122,42 +122,27 @@ class ProjectDirector(BaseAgent):
         if context:
             full_input = f"【上下文】\n{context}\n\n【需求】\n{message}"
 
-        if self._tools:
-            return self._invoke_with_tools(full_input)
-        return self._invoke_direct(full_input, include_context=False)
+        result = self.create_and_execute_workflow(
+            full_input,
+            execute_callback=self._execute_task_by_agent
+        )
+        return result
 
-    def _invoke_with_tools(self, message: str) -> str:
-        """使用工具调用"""
-        messages = [
-            SystemMessage(content=self.system_prompt),
-            HumanMessage(content=message),
-        ]
+    def _execute_task_by_agent(self, task: Task) -> str:
+        """通过 Agent 执行任务"""
+        assignee = task.assignee
+        if not assignee:
+            return "任务未分配"
 
-        response = self.llm.invoke(messages)
+        agent = self.get_team_member(assignee)
+        if not agent:
+            return f"Agent '{assignee}' 不存在"
 
-        if hasattr(response, "tool_calls") and response.tool_calls:
-            tool_results = []
-            for tool_call in response.tool_calls:
-                tool_name = tool_call.get("name")
-                tool_args = tool_call.get("args", {})
-                try:
-                    from src.mcp import embedded_mcp_client
-                    result = embedded_mcp_client.call_tool(tool_name, tool_args)
-                    tool_results.append(f"\n[{tool_name}] 结果: {result}")
-                except Exception as e:
-                    tool_results.append(f"\n[{tool_name}] 错误: {e}")
+        task_message = f"""
+【项目任务】
+{task.description}
 
-            messages.append(response)
-            messages.append(HumanMessage(content=f"工具执行结果: {' '.join(tool_results)}"))
-            final_response = self.llm.invoke(messages)
-            return final_response.content
-
-        return response.content if hasattr(response, "content") else str(response)
-
-    def _invoke_direct(self, message: str, include_context: bool = True) -> str:
-        messages = [
-            SystemMessage(content=self.system_prompt),
-            HumanMessage(content=message),
-        ]
-        response = self.llm.invoke(messages)
-        return response.content if hasattr(response, "content") else str(response)
+请执行任务并返回结果。如果需要创建文件，请使用工具创建。
+"""
+        result = agent.invoke(task_message)
+        return result[:500] if len(result) > 500 else result
