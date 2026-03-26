@@ -8,7 +8,7 @@ from .messages import (
 )
 from .bus import MessageBus, message_bus
 from .server import MCPToolsServer
-from .client import MCPClient, EmbeddedMCPClient, embedded_mcp_client
+from .client import EmbeddedMCPClient, embedded_mcp_client
 
 __all__ = [
     "Message",
@@ -19,7 +19,6 @@ __all__ = [
     "MessageBus",
     "message_bus",
     "MCPToolsServer",
-    "MCPClient",
     "EmbeddedMCPClient",
     "embedded_mcp_client",
 ]
