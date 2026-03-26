@@ -1,37 +1,54 @@
 #!/usr/bin/env node
 
 /**
- * Multi-Agent Team CLI
- * 纯文本简洁风格 - 使用 readline
+ * Multi-Agent Team CLI - 增强版
+ * 支持：实时状态、团队面板、进度条、加载动画
  */
 
 const WebSocket = require('ws');
 const axios = require('axios');
 const readline = require('readline');
 
+// ==================== 配置 ====================
+
+const DEFAULT_API_URL = 'http://localhost:8000';
+const DEFAULT_WS_URL = 'ws://localhost:8000/ws';
+
 // ANSI 颜色代码
 const ESC = '\x1b[';
 const colors = {
     reset: `${ESC}0m`,
     bold: `${ESC}1m`,
+    dim: `${ESC}2m`,
+    italic: `${ESC}3m`,
+    underline: `${ESC}4m`,
     cyan: `${ESC}96m`,
     green: `${ESC}92m`,
     yellow: `${ESC}93m`,
     white: `${ESC}97m`,
     gray: `${ESC}90m`,
     red: `${ESC}91m`,
+    blue: `${ESC}94m`,
+    magenta: `${ESC}95m`,
 };
 
 function c(text, color) {
-    return `${colors[color]}${text}${colors.reset}`;
+    return `${colors[color] || ''}${text}${colors.reset}`;
 }
 
-// ==================== 配置 ====================
+// ==================== 状态管理 ====================
 
-const DEFAULT_API_URL = 'http://localhost:8000';
-const DEFAULT_WS_URL = 'ws://localhost:8000/ws';
+const state = {
+    connected: false,
+    isProcessing: false,
+    currentTask: null,
+    agents: {},
+    logs: [],
+    messageHistory: [],
+};
 
-// 解析命令行参数
+// ==================== 解析参数 ====================
+
 const args = process.argv.slice(2);
 let apiUrl = DEFAULT_API_URL;
 let wsUrl = DEFAULT_WS_URL;
@@ -47,7 +64,7 @@ for (let i = 0; i < args.length; i++) {
         i++;
     } else if (args[i] === '--help' || args[i] === '-h') {
         console.log(`
-Multi-Agent Team CLI
+Multi-Agent Team CLI v2.0.0
 
 用法:
   agent-team [选项]
@@ -55,252 +72,375 @@ Multi-Agent Team CLI
 选项:
   --host <hostname>     指定后端 API 地址
   --workdir <directory> 指定工作目录
-  --help, -h            显示帮助
+  --help, -h           显示帮助
+
+命令:
+  /team    查看团队状态
+  /status  查看任务进度
+  /logs    查看操作日志
+  /clear   清屏
+  /exit    退出
 `);
         process.exit(0);
     }
 }
 
-// ==================== 清屏 ====================
-
-function clear() {
-    readline.cursorTo(process.stdout, 0, 0);
-    readline.clearScreenDown(process.stdout);
-}
-
-// ==================== 打印 Logo ====================
+// ==================== 初始化 readline ====================
 
 const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout,
 });
 
+// ==================== 工具函数 ====================
+
+function clear() {
+    readline.cursorTo(process.stdout, 0, 0);
+    readline.clearScreenDown(process.stdout);
+}
+
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// ==================== 加载动画 ====================
+
+const spinnerFrames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+let spinnerInterval = null;
+
+function startSpinner(text = '处理中') {
+    let frame = 0;
+    spinnerInterval = setInterval(() => {
+        readline.cursorTo(process.stdout, 0);
+        process.stdout.write(c(`${spinnerFrames[frame]} ${text}`, 'cyan'));
+        frame = (frame + 1) % spinnerFrames.length;
+    }, 100);
+}
+
+function stopSpinner() {
+    if (spinnerInterval) {
+        clearInterval(spinnerInterval);
+        spinnerInterval = null;
+        readline.clearLine(process.stdout, 0);
+    }
+}
+
+// ==================== 打印 Logo ====================
+
 function printLogo() {
     const logo = `
-${c('  ███╗   ███╗ █████╗  ██████╗██████╗ ██╗██████╗ ', 'cyan')}
-${c('  ████╗ ████║██╔══██╗██╔════╝██╔══██╗██║██╔══██╗', 'cyan')}
-${c('  ██╔████╔██║███████║██║     ██████╔╝██║██║  ██║', 'cyan')}
-${c('  ██║╚██╔╝██║██╔══██║██║     ██╔══██╗██║██║  ██║', 'cyan')}
-${c('  ██║ ╚═╝ ██║██║  ██║╚██████╗██║  ██║██║██████╔╝', 'cyan')}
-${c('  ╚═╝     ╚═╝╚═╝  ╚═╝ ╚═════╝╚═╝  ╚═╝╚═╝╚═════╝ ', 'cyan')}
+${c('  ╔═══════════════════════════════════════════════════════════╗', 'cyan')}
+${c('  ║', 'cyan')}${c('     ███╗   ███╗ █████╗  ██████╗██████╗ ██╗██████╗     ', 'white')}${c('║', 'cyan')}
+${c('  ║', 'cyan')}${c('     ████╗ ████║██╔══██╗██╔════╝██╔══██╗██║██╔══██╗    ', 'white')}${c('║', 'cyan')}
+${c('  ║', 'cyan')}${c('     ██╔████╔██║███████║██║     ██████╔╝██║██║  ██║    ', 'white')}${c('║', 'cyan')}
+${c('  ║', 'cyan')}${c('     ██║╚██╔╝██║██╔══██║██║     ██╔══██╗██║██║  ██║    ', 'white')}${c('║', 'cyan')}
+${c('  ║', 'cyan')}${c('     ██║ ╚═╝ ██║██║  ██║╚██████╗██║  ██║██║██████╔╝    ', 'white')}${c('║', 'cyan')}
+${c('  ║', 'cyan')}${c('     ╚═╝     ╚═╝╚═╝  ╚═╝ ╚═════╝╚═╝  ╚═╝╚═╝╚═════╝    ', 'white')}${c('║', 'cyan')}
+${c('  ╚═══════════════════════════════════════════════════════════╝', 'cyan')}
 `;
     console.log(logo);
 }
 
-// ==================== 打印信息 ====================
+// ==================== 团队面板 ====================
 
-function printInfo(connected) {
-    const status = connected ? c('● 已连接', 'green') : c('○ 连接中...', 'yellow');
-    console.log(c('  Multi-Agent Team CLI', 'white') + c('  v1.0.0', 'gray'));
-    console.log(c('  工作目录:', 'white') + ` ${workDir}`);
-    console.log(c('  后端地址:', 'white') + ` ${apiUrl}`);
-    console.log(`  ${status}`);
-    console.log();
-}
+const agentEmoji = {
+    ProjectDirector: '👔',
+    ProductManager: '📋',
+    UIDesigner: '🎨',
+    Architect: '🏗️',
+    DataEngineer: '🗄️',
+    TechLead: '👨‍💻',
+    FrontendDev: '🎯',
+    BackendDev: '⚙️',
+    CodeReviewer: '🔍',
+    Tester: '🧪',
+    BugFixer: '🔧',
+    SecurityAuditor: '🔒',
+    PerformanceOptimizer: '⚡',
+    DevOps: '🚀',
+    TechnicalWriter: '📝',
+};
 
-// ==================== 打印分隔线 ====================
-
-function printSeparator() {
-    console.log(c('────────────────────────────────────────────────────────────────────────', 'gray'));
-}
-
-// ==================== 打印消息 ====================
-
-function printMessage(role, content) {
-    let prefix = '';
-    let color = 'white';
+function printTeamPanel() {
+    console.log(c('\n┌─────────────────── 团队状态 ───────────────────┐', 'cyan'));
     
-    switch (role) {
-        case 'user':
-            prefix = c('> ', 'green');
-            break;
-        case 'assistant':
-            prefix = c('🤖 ', 'cyan');
-            break;
-        case 'system':
-            prefix = c('ℹ️  ', 'gray');
-            break;
-        case 'action':
-            prefix = c('📋 ', 'yellow');
-            break;
-        case 'success':
-            prefix = c('✅ ', 'green');
-            break;
-        case 'error':
-            prefix = c('❌ ', 'red');
-            break;
+    const agentList = Object.entries(state.agents);
+    if (agentList.length === 0) {
+        console.log(c('│  等待任务中...', 'gray'));
+    } else {
+        for (const [name, info] of agentList) {
+            const emoji = agentEmoji[name] || '🤖';
+            const statusColor = info.status === 'working' ? 'yellow' : 
+                              info.status === 'done' ? 'green' : 'gray';
+            const status = info.status === 'working' ? '工作中' : 
+                          info.status === 'done' ? '完成' : '空闲';
+            const task = info.current_task ? info.current_task.substring(0, 20) : '';
+            
+            console.log(c('│', 'cyan') + c(` ${emoji} ${name.padEnd(15)}`, 'white') + 
+                       c(` [${status.padEnd(4)}]`, statusColor) + 
+                       (task ? c(` ${task}`, 'gray') : ''));
+        }
     }
     
+    console.log(c('└────────────────────────────────────────────────┘', 'cyan'));
+}
+
+// ==================== 进度条 ====================
+
+function printProgressBar(percentage, width = 30) {
+    const filled = Math.round(width * percentage / 100);
+    const bar = '█'.repeat(filled) + '░'.repeat(width - filled);
+    return c(`[${bar}] ${percentage}%`, percentage < 30 ? 'red' : percentage < 70 ? 'yellow' : 'green');
+}
+
+// ==================== 状态面板 ====================
+
+function printStatusPanel() {
+    const total = Object.keys(state.agents).length;
+    const working = Object.values(state.agents).filter(a => a.status === 'working').length;
+    const done = Object.values(state.agents).filter(a => a.status === 'done').length;
+    const progress = total > 0 ? Math.round(done / total * 100) : 0;
+
+    console.log(c('\n┌─────────────────── 任务进度 ───────────────────┐', 'cyan'));
+    console.log(c('│', 'cyan') + c(` 当前任务: ${state.currentTask || '无'}`, 'white'));
+    console.log(c('│', 'cyan') + ` ${printProgressBar(progress)}`);
+    console.log(c('│', 'cyan') + c(` 工作中: ${working}  |  完成: ${done}  |  总计: ${total}`, 'gray'));
+    console.log(c('└────────────────────────────────────────────────┘', 'cyan'));
+}
+
+// ==================== 日志展示 ====================
+
+function printLogs() {
+    if (state.logs.length === 0) {
+        console.log(c('\n暂无日志', 'gray'));
+        return;
+    }
+    
+    console.log(c('\n┌─────────────────── 操作日志 ───────────────────┐', 'cyan'));
+    state.logs.slice(-10).forEach(log => {
+        const time = new Date(log.timestamp).toLocaleTimeString();
+        const color = log.type === 'error' ? 'red' : log.type === 'success' ? 'green' : 'white';
+        console.log(c('│', 'cyan') + c(` [${time}]`, 'gray') + c(` ${log.message}`, color));
+    });
+    console.log(c('└────────────────────────────────────────────────┘', 'cyan'));
+}
+
+// ==================== 消息美化 ====================
+
+function printMessage(content, role = 'assistant') {
+    const roleConfig = {
+        user: { prefix: c('👤 你', 'green'), color: 'white' },
+        assistant: { prefix: c('🤖 Agent', 'cyan'), color: 'white' },
+        system: { prefix: c('ℹ️ 系统', 'gray'), color: 'gray' },
+        success: { prefix: c('✅ 成功', 'green'), color: 'green' },
+        error: { prefix: c('❌ 错误', 'red'), color: 'red' },
+        warning: { prefix: c('⚠️ 警告', 'yellow'), color: 'yellow' },
+    };
+
+    const config = roleConfig[role] || roleConfig.assistant;
+    
+    // 处理代码块
+    content = content.replace(/```(\w+)?\n([\s\S]*?)```/g, (match, lang, code) => {
+        return c('┌─ ' + (lang || 'code') + ' ', 'gray') + '─'.repeat(20) + '\n' +
+               c(code, 'yellow') + '\n' +
+               c('└' + '─'.repeat(30), 'gray');
+    });
+    
+    // 处理行
     const lines = content.split('\n');
     lines.forEach((line, i) => {
-        if (i === 0) {
-            console.log(`${prefix}${line}`);
-        } else {
-            console.log(`  ${line}`);
+        if (line.trim()) {
+            console.log(i === 0 ? `${config.prefix}  ${line}` : `  ${line}`);
         }
     });
 }
 
-// ==================== WebSocket 连接 ====================
+// ==================== 分隔线 ====================
+
+function printSeparator() {
+    console.log(c('────────────────────────────────────────────────────────────────', 'gray'));
+}
+
+// ==================== WebSocket ====================
 
 let ws = null;
-let isConnected = false;
 
 function connectWebSocket() {
     return new Promise((resolve, reject) => {
         ws = new WebSocket(wsUrl);
         
         ws.on('open', () => {
-            isConnected = true;
+            state.connected = true;
+            addLog('已连接到服务器', 'success');
             resolve();
         });
         
+        ws.on('message', (data) => {
+            try {
+                const msg = JSON.parse(data.toString());
+                handleWsMessage(msg);
+            } catch (e) {
+                console.log(c(`[WS] ${data}`, 'gray'));
+            }
+        });
+        
         ws.on('close', () => {
-            isConnected = false;
+            state.connected = false;
+            addLog('连接已断开', 'error');
         });
         
         ws.on('error', (err) => {
+            addLog(`连接错误: ${err.message}`, 'error');
             reject(err);
         });
     });
 }
 
-// ==================== 询问用户 ====================
-
-function askQuestion(question) {
-    return new Promise(resolve => {
-        rl.question(question, answer => {
-            resolve(answer);
-        });
-    });
+function handleWsMessage(msg) {
+    if (msg.type === 'connected') {
+        if (msg.agents) {
+            msg.agents.forEach(agent => {
+                state.agents[agent.name] = agent;
+            });
+        }
+    } else if (msg.type === 'status_update') {
+        if (msg.agents) {
+            msg.agents.forEach(agent => {
+                state.agents[agent.name] = agent;
+            });
+        }
+        if (msg.current_task) {
+            state.currentTask = msg.current_task;
+        }
+    }
+    
+    // 如果正在处理中，更新显示
+    if (state.isProcessing) {
+        renderStatus();
+    }
 }
 
-// ==================== HTTP API 调用 ====================
+// ==================== 日志管理 ====================
 
-let isWaiting = false;
+function addLog(message, type = 'info') {
+    state.logs.push({
+        timestamp: new Date(),
+        message,
+        type,
+    });
+    // 保留最近 50 条
+    if (state.logs.length > 50) {
+        state.logs = state.logs.slice(-50);
+    }
+}
+
+// ==================== 渲染状态 ====================
+
+function renderStatus() {
+    clear();
+    printLogo();
+    console.log();
+    printStatusPanel();
+    console.log();
+    printTeamPanel();
+    console.log();
+    printSeparator();
+}
+
+// ==================== API 调用 ====================
 
 async function sendMessage(message) {
-    if (isWaiting) return;
-    isWaiting = true;
+    if (state.isProcessing) return;
+    
+    state.isProcessing = true;
+    state.currentTask = message;
+    addLog(`发送消息: ${message.substring(0, 50)}`, 'info');
+    
+    console.log();
+    printSeparator();
     
     try {
-        // 显示用户消息
-        console.log(c('> ', 'green') + message);
-        console.log();
-        
-        // 显示思考状态
-        console.log(c('┌─ 任务分析 ──────────────────────────────────────────────', 'cyan'));
-        console.log(c('│', 'cyan') + c(' 正在分析需求...', 'gray'));
+        startSpinner('Agent 正在处理');
         
         const response = await axios.post(`${apiUrl}/chat`, {
             message: message,
             work_dir: workDir,
-        });
+        }, { timeout: 120000 });
+        
+        stopSpinner();
         
         const { message: reply, actions } = response.data;
         
-        // 调试：显示原始回复（前 500 字符）
-        // console.log(c('\n[调试] Agent 原始回复:', 'gray'));
-        // console.log(c(reply.substring(0, 500), 'gray'));
-        // console.log();
+        // 添加到历史
+        state.messageHistory.push({ role: 'user', content: message });
+        state.messageHistory.push({ role: 'assistant', content: reply });
         
-        // 从回复中提取纯文字说明（去除 JSON 部分）
-        let textMessage = reply;
-        if (reply.includes('```json')) {
-            textMessage = reply.split('```json')[0].trim();
-        }
-        
-        // 显示 Agent 的思考过程
-        const thoughtLines = textMessage.split('\n').filter(line => {
-            return line.length > 0 && !line.startsWith('```') && !line.startsWith('{');
-        });
-        
-        if (thoughtLines.length > 0) {
-            thoughtLines.forEach(line => {
-                console.log(c('│', 'cyan') + `  ${line}`);
-            });
-        } else {
-            console.log(c('│', 'cyan') + c('  正在理解需求...', 'gray'));
-            console.log(c('│', 'cyan') + c('  正在制定执行计划...', 'gray'));
-        }
-        
-        console.log(c('└────────────────────────────────────────────────────────────', 'cyan'));
         console.log();
-
-        // 执行操作指令
+        printMessage(reply, 'assistant');
+        
+        // 执行操作
         if (actions && actions.length > 0) {
+            console.log();
             console.log(c('📋 执行操作:', 'cyan'));
             
             for (const action of actions) {
                 if (action.type === 'create_file') {
-                    console.log(c(`   ◐ 创建文件：${action.path}`, 'gray'));
-                    
+                    console.log(c(`   ◐ 创建: ${action.path}`, 'gray'));
                     try {
                         await axios.post(`${apiUrl}/execute`, {
                             message: JSON.stringify({ actions: [action] }),
                             work_dir: workDir,
                         });
-                        readline.moveCursor(process.stdout, 0, -1);
-                        readline.clearLine(process.stdout, 0);
-                        console.log(c(`   ✅ ${action.path}`, 'green'));
+                        console.log(c(`   ✅ 已创建 ${action.path}`, 'green'));
+                        addLog(`创建文件: ${action.path}`, 'success');
                     } catch (err) {
-                        readline.moveCursor(process.stdout, 0, -1);
-                        readline.clearLine(process.stdout, 0);
                         console.log(c(`   ❌ 创建失败`, 'red'));
+                        addLog(`创建失败: ${action.path}`, 'error');
                     }
-                    
                 } else if (action.type === 'run_command') {
-                    console.log(c(`   ◐ 运行命令：${action.command}`, 'gray'));
-                    
-                    const confirmed = await askQuestion(c(`      是否执行？(y/n): `, 'yellow'));
+                    console.log(c(`   ⚠️  命令: ${action.command}`, 'yellow'));
+                    const confirmed = await askQuestion(c('   是否执行？(y/n): ', 'yellow'));
                     if (confirmed.toLowerCase() === 'y') {
                         try {
                             await axios.post(`${apiUrl}/execute`, {
                                 message: JSON.stringify({ actions: [action] }),
                                 work_dir: workDir,
                             });
-                            readline.moveCursor(process.stdout, 0, -1);
-                            readline.clearLine(process.stdout, 0);
-                            console.log(c(`   ✅ 命令已完成`, 'green'));
+                            console.log(c(`   ✅ 命令已执行`, 'green'));
+                            addLog(`执行命令: ${action.command}`, 'success');
                         } catch (err) {
-                            readline.moveCursor(process.stdout, 0, -1);
-                            readline.clearLine(process.stdout, 0);
                             console.log(c(`   ❌ 执行失败`, 'red'));
+                            addLog(`执行失败: ${action.command}`, 'error');
                         }
                     } else {
-                        readline.moveCursor(process.stdout, 0, -1);
-                        readline.clearLine(process.stdout, 0);
-                        console.log(c(`   ⓧ 已取消`, 'gray'));
+                        console.log(c('   ⓧ 已取消', 'gray'));
                     }
                 }
-            }
-            console.log();
-        } else {
-            // 没有操作指令，显示文字回复
-            if (textMessage.trim()) {
-                console.log(c('🤖 Agent:', 'cyan'));
-                textMessage.split('\n').forEach(line => {
-                    if (line.trim() && !line.includes('json')) {
-                        console.log(`  ${line}`);
-                    }
-                });
-                console.log();
             }
         }
         
     } catch (error) {
+        stopSpinner();
         if (error.code === 'ECONNREFUSED') {
-            printMessage('error', '无法连接到后端 API');
+            printMessage('无法连接到后端 API', 'error');
         } else {
-            printMessage('error', `错误：${error.message}`);
+            printMessage(`错误: ${error.message}`, 'error');
         }
+        addLog(`错误: ${error.message}`, 'error');
     } finally {
-        isWaiting = false;
+        state.isProcessing = false;
+        state.currentTask = null;
         showPrompt();
     }
 }
 
-// ==================== 显示输入提示 ====================
+// ==================== 输入处理 ====================
+
+function askQuestion(question) {
+    return new Promise(resolve => {
+        rl.question(question, answer => resolve(answer));
+    });
+}
 
 function showPrompt() {
     console.log();
@@ -310,24 +450,55 @@ function showPrompt() {
 function handleInput(input) {
     const message = input.trim();
     
-    if (message) {
-        if (message === '/exit' || message === '/quit' || message === '/q') {
+    if (!message) {
+        showPrompt();
+        return;
+    }
+    
+    // 命令处理
+    switch (message.toLowerCase()) {
+        case '/exit':
+        case '/quit':
+        case '/q':
             console.log(c('\n👋 再见！\n', 'green'));
             process.exit(0);
-        } else if (message === '/clear' || message === '/cls') {
+            
+        case '/clear':
+        case '/cls':
             clear();
             printLogo();
-            printInfo(isConnected);
-            printSeparator();
+            printStatusPanel();
+            console.log();
+            printTeamPanel();
             showPrompt();
-        } else if (message === '/help') {
-            printMessage('system', '可用命令：/exit (退出), /clear (清屏)');
+            
+        case '/team':
+            console.log();
+            printTeamPanel();
             showPrompt();
-        } else {
+            
+        case '/status':
+            console.log();
+            printStatusPanel();
+            showPrompt();
+            
+        case '/logs':
+            printLogs();
+            showPrompt();
+            
+        case '/help':
+            console.log(`
+${c('可用命令:', 'cyan')}
+  ${c('/team', 'white')}   - 查看团队状态
+  ${c('/status', 'white')}  - 查看任务进度
+  ${c('/logs', 'white')}    - 查看操作日志
+  ${c('/clear', 'white')}   - 清屏
+  ${c('/exit', 'white')}    - 退出
+`);
+            showPrompt();
+            
+        default:
             sendMessage(message);
-        }
-    } else {
-        showPrompt();
     }
 }
 
@@ -336,27 +507,37 @@ function handleInput(input) {
 async function start() {
     clear();
     printLogo();
-    printInfo(false);
-    printSeparator();
+    console.log(c('\n  正在连接...', 'gray'));
     
     try {
         await connectWebSocket();
-        printInfo(true);
+        clear();
+        printLogo();
+        printStatusPanel();
+        console.log();
+        printTeamPanel();
         printSeparator();
-        printMessage('system', '输入你的需求，按 Enter 发送...');
-        console.log();
+        printMessage('输入你的需求，按 Enter 发送...\n使用 /help 查看更多命令', 'system');
     } catch (err) {
-        printMessage('error', '无法连接到后端，请确保 server.py 正在运行');
-        console.log();
+        console.log(c('\n❌ 无法连接到后端，请确保 server.py 正在运行', 'red'));
+        console.log(c(`   地址: ${apiUrl}`, 'gray'));
     }
     
     showPrompt();
 }
 
-// 处理 Ctrl+C
+// ==================== 信号处理 ====================
+
 process.on('SIGINT', () => {
     console.log(c('\n\n👋 再见！\n', 'green'));
     process.exit(0);
 });
+
+process.on('uncaughtException', (err) => {
+    console.log(c(`\n❌ 错误: ${err.message}`, 'red'));
+    process.exit(1);
+});
+
+// ==================== 运行 ====================
 
 start();
