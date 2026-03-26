@@ -130,19 +130,20 @@ class ProjectDirector(BaseAgent):
 
     def _execute_task_by_agent(self, task: Task) -> str:
         """通过 Agent 执行任务"""
-        from server import update_agent_status, current_task, message_bus
-
         assignee = task.assignee
         if not assignee:
             return "任务未分配"
 
-        # 更新任务状态
-        update_agent_status(assignee, "working", task.description)
-        update_agent_status("ProjectDirector", "working", task.name)
+        # 更新任务状态 - 通过全局变量
+        import server
+        if hasattr(server, 'update_agent_status'):
+            server.update_agent_status(assignee, "working", task.description)
+            server.update_agent_status("ProjectDirector", "working", task.name)
 
         agent = self.get_team_member(assignee)
         if not agent:
-            update_agent_status(assignee, "idle")
+            if hasattr(server, 'update_agent_status'):
+                server.update_agent_status(assignee, "idle")
             return f"Agent '{assignee}' 不存在"
 
         task_message = f"""
@@ -153,8 +154,10 @@ class ProjectDirector(BaseAgent):
 """
         try:
             result = agent.invoke(task_message)
-            update_agent_status(assignee, "done", task.description)
+            if hasattr(server, 'update_agent_status'):
+                server.update_agent_status(assignee, "done", task.description)
             return result[:500] if len(result) > 500 else result
         except Exception as e:
-            update_agent_status(assignee, "idle")
+            if hasattr(server, 'update_agent_status'):
+                server.update_agent_status(assignee, "idle")
             return f"执行失败: {str(e)}"
