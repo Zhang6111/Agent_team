@@ -38,6 +38,7 @@ function c(text, color) {
 
 // ==================== 状态管理 ====================
 
+// 状态管理
 const state = {
     connected: false,
     isProcessing: false,
@@ -45,6 +46,7 @@ const state = {
     agents: {},
     logs: [],
     messageHistory: [],
+    pendingResolve: null,   // 等待 WebSocket task_complete 事件的 resolve
 };
 
 // ==================== 解析参数 ====================
@@ -312,25 +314,49 @@ function handleWsMessage(msg) {
         if (msg.current_task) {
             state.currentTask = msg.current_task;
         }
-    }
-    
-    // 如果正在处理中，更新显示
-    if (state.isProcessing) {
-        renderStatus();
+        // 实时刷新状态面板
+        if (state.isProcessing) {
+            stopSpinner();
+            process.stdout.write('\x1b[2K\r');  // 清除当前行
+            printTeamPanelInline();
+            startSpinner(state.currentTask ? `处理中: ${state.currentTask.substring(0, 40)}` : '处理中');
+        }
+    } else if (msg.type === 'log') {
+        addLog(msg.message, msg.level);
+        if (state.isProcessing) {
+            stopSpinner();
+            const color = msg.level === 'error' ? 'red' : msg.level === 'success' ? 'green' : 'gray';
+            console.log(c(`  [${msg.level.toUpperCase()}] ${msg.message}`, color));
+            startSpinner('继续处理中');
+        }
+    } else if (msg.type === 'task_complete') {
+        // 任务完成，解析结果
+        if (state.pendingResolve) {
+            state.pendingResolve({ reply: msg.message, actions: msg.actions || [] });
+            state.pendingResolve = null;
+        }
+    } else if (msg.type === 'task_error') {
+        if (state.pendingResolve) {
+            state.pendingResolve({ error: msg.error });
+            state.pendingResolve = null;
+        }
     }
 }
 
 // ==================== 日志管理 ====================
 
 function addLog(message, type = 'info') {
-    state.logs.push({
-        timestamp: new Date(),
-        message,
-        type,
-    });
-    // 保留最近 50 条
-    if (state.logs.length > 50) {
-        state.logs = state.logs.slice(-50);
+    state.logs.push({ timestamp: new Date(), message, type });
+    if (state.logs.length > 50) state.logs = state.logs.slice(-50);
+}
+
+// ==================== 团队面板（单行刷新版）====================
+
+function printTeamPanelInline() {
+    const working = Object.values(state.agents).filter(a => a.status === 'working');
+    if (working.length > 0) {
+        const names = working.map(a => `${agentEmoji[a.name] || '🤖'} ${a.name}`).join('  ');
+        process.stdout.write(c(`  工作中: ${names}\n`, 'yellow'));
     }
 }
 
@@ -347,42 +373,70 @@ function renderStatus() {
     printSeparator();
 }
 
-// ==================== API 调用 ====================
+// ==================== API 调用（异步 WebSocket 驱动）====================
+
+function waitForTaskResult() {
+    return new Promise((resolve) => {
+        state.pendingResolve = resolve;
+        // 超时保护：30 分钟
+        setTimeout(() => {
+            if (state.pendingResolve) {
+                state.pendingResolve = null;
+                resolve({ error: '任务超时（30 分钟）' });
+            }
+        }, 30 * 60 * 1000);
+    });
+}
 
 async function sendMessage(message) {
     if (state.isProcessing) return;
-    
+
     state.isProcessing = true;
     state.currentTask = message;
-    addLog(`发送消息: ${message.substring(0, 50)}`, 'info');
-    
+    addLog(`发送: ${message.substring(0, 50)}`, 'info');
+
     console.log();
     printSeparator();
-    
+    console.log(c(`> ${message}`, 'green'));
+    console.log();
+
     try {
-        startSpinner('Agent 正在处理');
-        
+        // 1. 发送请求，后端立即返回 task_id
         const response = await axios.post(`${apiUrl}/chat`, {
             message: message,
             work_dir: workDir,
-        }, { timeout: 300000 });  // 5 分钟超时
-        
+        }, { timeout: 10000 });
+
+        const { task_id } = response.data;
+        console.log(c(`  任务已提交 [${task_id.substring(0, 8)}...]`, 'gray'));
+        console.log();
+        startSpinner('Agent 团队正在处理，实时进度见下方...');
+
+        // 2. 等待 WebSocket 推送 task_complete / task_error
+        const result = await waitForTaskResult();
         stopSpinner();
-        
-        const { message: reply, actions } = response.data;
-        
+
+        if (result.error) {
+            printMessage(result.error, 'error');
+            addLog(result.error, 'error');
+            showPrompt();
+            return;
+        }
+
+        const { reply, actions } = result;
+
         // 添加到历史
         state.messageHistory.push({ role: 'user', content: message });
         state.messageHistory.push({ role: 'assistant', content: reply });
-        
+
         console.log();
         printMessage(reply, 'assistant');
-        
-        // 执行操作
+
+        // 3. 执行文件操作
         if (actions && actions.length > 0) {
             console.log();
             console.log(c('📋 执行操作:', 'cyan'));
-            
+
             for (const action of actions) {
                 if (action.type === 'create_file') {
                     console.log(c(`   ◐ 创建: ${action.path}`, 'gray'));
@@ -390,7 +444,7 @@ async function sendMessage(message) {
                         await axios.post(`${apiUrl}/execute`, {
                             message: JSON.stringify({ actions: [action] }),
                             work_dir: workDir,
-                        });
+                        }, { timeout: 30000 });
                         console.log(c(`   ✅ 已创建 ${action.path}`, 'green'));
                         addLog(`创建文件: ${action.path}`, 'success');
                     } catch (err) {
@@ -405,12 +459,11 @@ async function sendMessage(message) {
                             await axios.post(`${apiUrl}/execute`, {
                                 message: JSON.stringify({ actions: [action] }),
                                 work_dir: workDir,
-                            });
+                            }, { timeout: 60000 });
                             console.log(c(`   ✅ 命令已执行`, 'green'));
                             addLog(`执行命令: ${action.command}`, 'success');
                         } catch (err) {
                             console.log(c(`   ❌ 执行失败`, 'red'));
-                            addLog(`执行失败: ${action.command}`, 'error');
                         }
                     } else {
                         console.log(c('   ⓧ 已取消', 'gray'));
@@ -418,7 +471,7 @@ async function sendMessage(message) {
                 }
             }
         }
-        
+
     } catch (error) {
         stopSpinner();
         if (error.code === 'ECONNREFUSED') {
