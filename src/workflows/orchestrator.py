@@ -238,6 +238,10 @@ class WorkflowEngine:
         """执行工作流"""
         results = []
 
+        # 检查是否有可执行的任务
+        if not self.tasks:
+            return results
+
         while True:
             runnable = self.get_runnable_tasks()
             if not runnable:

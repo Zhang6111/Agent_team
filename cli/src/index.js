@@ -365,7 +365,7 @@ async function sendMessage(message) {
         const response = await axios.post(`${apiUrl}/chat`, {
             message: message,
             work_dir: workDir,
-        }, { timeout: 120000 });
+        }, { timeout: 300000 });  // 5 分钟超时
         
         stopSpinner();
         
