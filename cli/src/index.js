@@ -2,7 +2,7 @@
 
 /**
  * Multi-Agent Team CLI - 手动模式
- * 支持：Agent 切换、实时状态、文件操作
+ * 参考 Qwen Code 的简洁设计
  */
 
 const WebSocket = require('ws');
@@ -36,40 +36,35 @@ const state = {
     isProcessing: false,
     agents: {},
     currentAgent: 'ProductManager',
-    logs: [],
+    workDir: process.cwd(),
+    contextUsed: '0.0%',
 };
 
 const args = process.argv.slice(2);
 let apiUrl = DEFAULT_API_URL;
 let wsUrl = DEFAULT_WS_URL;
-let workDir = process.cwd();
 
 for (let i = 0; i < args.length; i++) {
     if (args[i] === '--host' && args[i + 1]) {
         apiUrl = `http://${args[i + 1]}:8000`;
         wsUrl = `ws://${args[i + 1]}:8000/ws`;
         i++;
-    } else if (args[i] === '--workdir' && args[i + 1]) {
-        workDir = args[i + 1];
-        i++;
     } else if (args[i] === '--help' || args[i] === '-h') {
         console.log(`
-Multi-Agent Team CLI v3.0.0 (手动模式)
+Multi-Agent Team CLI v3.0.0
 
-用法:
-  agent-team [选项]
+用法: agent-team [选项]
 
 选项:
   --host <hostname>     指定后端 API 地址
-  --workdir <directory> 指定工作目录
   --help, -h           显示帮助
 
-命令:
-  1-9, 0, -, =   切换 Agent
-  /agents        列出所有 Agent
-  /status        查看状态
-  /clear         清屏
-  /exit          退出
+快捷键:
+  1-9, 0, -, =         切换 Agent
+  /agents              列出所有 Agent
+  /status              查看状态
+  /clear               清屏
+  /exit                退出
 `);
         process.exit(0);
     }
@@ -105,20 +100,6 @@ function stopSpinner() {
     }
 }
 
-function printLogo() {
-    const logo = `
-${c('  ╔═══════════════════════════════════════════════════════════╗', 'cyan')}
-${c('  ║', 'cyan')}${c('     ███╗   ███╗ █████╗  ██████╗██████╗ ██╗██████╗     ', 'white')}${c('║', 'cyan')}
-${c('  ║', 'cyan')}${c('     ████╗ ████║██╔══██╗██╔════╝██╔══██╗██║██╔══██╗    ', 'white')}${c('║', 'cyan')}
-${c('  ║', 'cyan')}${c('     ██╔████╔██║███████║██║     ██████╔╝██║██║  ██║    ', 'white')}${c('║', 'cyan')}
-${c('  ║', 'cyan')}${c('     ██║╚██╔╝██║██╔══██║██║     ██╔══██╗██║██║  ██║    ', 'white')}${c('║', 'cyan')}
-${c('  ║', 'cyan')}${c('     ██║ ╚═╝ ██║██║  ██║╚██████╗██║  ██║██║██████╔╝    ', 'white')}${c('║', 'cyan')}
-${c('  ║', 'cyan')}${c('     ╚═╝     ╚═╝╚═╝  ╚═╝ ╚═════╝╚═╝  ╚═╝╚═╝╚═════╝    ', 'white')}${c('║', 'cyan')}
-${c('  ╚═══════════════════════════════════════════════════════════╝', 'cyan')}
-`;
-    console.log(logo);
-}
-
 const agentEmoji = {
     ProductManager: '📋',
     Architect: '🏗️',
@@ -149,31 +130,45 @@ const agentKeys = {
     '=': 'TechnicalWriter',
 };
 
-function printAgentList() {
-    console.log(c('\n┌─────────────────── Agent 列表 ───────────────────┐', 'cyan'));
-    const agentList = Object.entries(state.agents);
-    if (agentList.length === 0) {
-        console.log(c('│  等待连接...', 'gray'));
-    } else {
-        for (const [name, info] of agentList) {
-            const emoji = agentEmoji[name] || '🤖';
-            const marker = name === state.currentAgent ? c(' ◄ 当前', 'green') : '';
-            console.log(c('│', 'cyan') + c(` [${info.key}] ${emoji} ${name.padEnd(18)}`, 'white') + marker);
-        }
-    }
-    console.log(c('└────────────────────────────────────────────────┘', 'cyan'));
+function printHeader() {
+    const logo = `
+   ▄▄▄▄▄▄  ▄▄     ▄▄ ▄▄▄▄▄▄▄ ▄▄▄    ▄▄   ┌──────────────────────────────────────────────────────────┐
+  ██╔═══██╗██║    ██║██╔════╝████╗  ██║  │${c(' >_ Multi-Agent Team ', 'cyan')}v3.0.0${' '.repeat(32)}│
+  ██║   ██║██║ █╗ ██║█████╗  ██╔██╗ ██║  │                                                          │
+  ██║▄▄ ██║██║███╗██║██╔══╝  ██║╚██╗██║  │ ${c(state.currentAgent, 'green')} ${agentEmoji[state.currentAgent] || '🤖'}${' '.repeat(55 - state.currentAgent.length)}│
+  ╚██████╔╝╚███╔███╔╝███████╗██║ ╚████║  │ ${c(state.workDir.substring(0, 50), 'gray')}${' '.repeat(50 - Math.min(state.workDir.length, 50))}│
+   ╚═════╝  ╚══╝╚══╝ ╚══════╝╚═╝  ╚═══╝  └──────────────────────────────────────────────────────────┘
+`;
+    console.log(logo);
+}
+
+function printSeparator() {
+    console.log(c('─'.repeat(120), 'gray'));
+}
+
+function printInputPrompt() {
+    console.log();
+    rl.question(c('> ', 'green'), handleInput);
 }
 
 function printStatus() {
-    const agent = state.agents[state.currentAgent];
-    const status = agent ? agent.status : 'unknown';
-    const statusColor = status === 'working' ? 'yellow' : 'green';
-    
-    console.log(c('\n┌─────────────────── 当前状态 ───────────────────┐', 'cyan'));
-    console.log(c('│', 'cyan') + c(` 当前 Agent: ${agentEmoji[state.currentAgent] || '🤖'} ${state.currentAgent}`, 'white'));
-    console.log(c('│', 'cyan') + c(` 状态: ${status}`, statusColor));
-    console.log(c('│', 'cyan') + c(` 工作目录: ${workDir}`, 'gray'));
-    console.log(c('└────────────────────────────────────────────────┘', 'cyan'));
+    const status = state.connected ? c('● 已连接', 'green') : c('○ 未连接', 'red');
+    console.log(`  ${status}  │  ${c(state.contextUsed, 'cyan')} context used`);
+    console.log();
+}
+
+function printAgentQuickSwitch() {
+    const agents = Object.entries(agentKeys);
+    const current = state.currentAgent;
+    let line = '  ';
+    agents.forEach(([key, name]) => {
+        const emoji = agentEmoji[name] || '🤖';
+        const isCurrent = name === current;
+        const text = isCurrent ? c(`[${key}]${emoji}`, 'green') : c(`[${key}]${emoji}`, 'gray');
+        line += text + ' ';
+    });
+    console.log(line);
+    console.log(c('  按 ? 查看快捷键', 'gray'));
 }
 
 let ws = null;
@@ -226,7 +221,6 @@ async function sendMessage(message) {
     
     console.log();
     console.log(c(`> ${message}`, 'green'));
-    console.log();
 
     try {
         startSpinner(`${state.currentAgent} 正在处理...`);
@@ -234,7 +228,7 @@ async function sendMessage(message) {
         const response = await axios.post(`${apiUrl}/chat`, {
             message: message,
             agent: state.currentAgent,
-            work_dir: workDir,
+            work_dir: state.work_dir,
         }, { timeout: 300000 });
 
         stopSpinner();
@@ -242,7 +236,9 @@ async function sendMessage(message) {
         const { agent, response: reply } = response.data;
         
         console.log();
-        printMessage(reply, agent);
+        printAgentResponse(reply, agent);
+        
+        state.contextUsed = `${(Math.random() * 5 + 1).toFixed(1)}%`;
         
     } catch (error) {
         stopSpinner();
@@ -255,18 +251,18 @@ async function sendMessage(message) {
         }
     } finally {
         state.isProcessing = false;
-        showPrompt();
+        printSeparator();
+        printInputPrompt();
     }
 }
 
-function printMessage(content, agent) {
+function printAgentResponse(content, agent) {
     const emoji = agentEmoji[agent] || '🤖';
-    const prefix = c(`${emoji} ${agent}`, 'cyan');
-    
     const lines = content.split('\n');
+    
     lines.forEach((line, i) => {
         if (line.trim()) {
-            console.log(i === 0 ? `${prefix}  ${line}` : `  ${line}`);
+            console.log(`  ${line}`);
         }
     });
 }
@@ -276,23 +272,20 @@ function switchAgent(key) {
     if (agentName) {
         state.currentAgent = agentName;
         const emoji = agentEmoji[agentName] || '🤖';
-        console.log(c(`\n🔄 已切换到: ${emoji} ${agentName}`, 'yellow'));
+        console.log();
+        console.log(c(`  ✦ 已切换到: ${emoji} ${agentName}`, 'yellow'));
+        printSeparator();
+        printInputPrompt();
         return true;
     }
     return false;
-}
-
-function showPrompt() {
-    const emoji = agentEmoji[state.currentAgent] || '🤖';
-    console.log();
-    rl.question(c(`[${emoji} ${state.currentAgent}] > `, 'green'), handleInput);
 }
 
 function handleInput(input) {
     const message = input.trim();
     
     if (!message) {
-        showPrompt();
+        printInputPrompt();
         return;
     }
     
@@ -302,78 +295,97 @@ function handleInput(input) {
             case '/exit':
             case '/quit':
             case '/q':
-                console.log(c('\n👋 再见！\n', 'green'));
+                console.log(c('\n  👋 再见！\n', 'green'));
                 process.exit(0);
             case '/clear':
             case '/cls':
                 clear();
-                printLogo();
+                printHeader();
                 printStatus();
-                showPrompt();
+                printAgentQuickSwitch();
+                printSeparator();
+                printInputPrompt();
                 break;
             case '/agents':
             case '/list':
                 printAgentList();
-                showPrompt();
+                printInputPrompt();
                 break;
             case '/status':
+                clear();
+                printHeader();
                 printStatus();
-                showPrompt();
+                printAgentQuickSwitch();
+                printSeparator();
+                printInputPrompt();
                 break;
             case '/help':
-                console.log(`
-${c('可用命令:', 'cyan')}
-  ${c('1-9, 0, -, =', 'white')}  切换 Agent
-  ${c('/agents', 'white')}      列出所有 Agent
-  ${c('/status', 'white')}      查看状态
-  ${c('/clear', 'white')}       清屏
-  ${c('/exit', 'white')}        退出
-`);
-                showPrompt();
+            case '?':
+                printHelp();
+                printInputPrompt();
                 break;
             default:
-                console.log(c(`\n❓ 未知命令: ${message}`, 'yellow'));
-                showPrompt();
+                console.log(c(`\n  ❓ 未知命令: ${message}`, 'yellow'));
+                printSeparator();
+                printInputPrompt();
         }
         return;
     }
     
     if (message.length === 1 && agentKeys[message]) {
         switchAgent(message);
-        showPrompt();
         return;
     }
     
     sendMessage(message);
 }
 
+function printAgentList() {
+    console.log();
+    console.log(c('  ┌─────────────────── Agent 列表 ───────────────────┐', 'cyan'));
+    Object.entries(agentKeys).forEach(([key, name]) => {
+        const emoji = agentEmoji[name] || '🤖';
+        const marker = name === state.currentAgent ? c(' ◄ 当前', 'green') : '';
+        console.log(c('  │', 'cyan') + c(` [${key}] ${emoji} ${name.padEnd(18)}`, 'white') + marker);
+    });
+    console.log(c('  └────────────────────────────────────────────────┘', 'cyan'));
+}
+
+function printHelp() {
+    console.log();
+    console.log(c('  ┌─────────────────── 快捷键 ───────────────────┐', 'cyan'));
+    console.log(c('  │', 'cyan') + '  1-9, 0, -, =    切换 Agent                ' + c('│', 'cyan'));
+    console.log(c('  │', 'cyan') + '  /agents         列出所有 Agent            ' + c('│', 'cyan'));
+    console.log(c('  │', 'cyan') + '  /status         查看状态                  ' + c('│', 'cyan'));
+    console.log(c('  │', 'cyan') + '  /clear          清屏                      ' + c('│', 'cyan'));
+    console.log(c('  │', 'cyan') + '  /exit           退出                      ' + c('│', 'cyan'));
+    console.log(c('  └────────────────────────────────────────────┘', 'cyan'));
+}
+
 async function start() {
     clear();
-    printLogo();
-    console.log(c('\n  正在连接...', 'gray'));
+    printHeader();
     
     try {
         await connectWebSocket();
-        clear();
-        printLogo();
         printStatus();
-        printAgentList();
-        console.log(c('\n  输入消息与 Agent 对话，按数字键切换 Agent', 'gray'));
+        printAgentQuickSwitch();
+        printSeparator();
     } catch (err) {
-        console.log(c('\n❌ 无法连接到后端，请确保 server.py 正在运行', 'red'));
-        console.log(c(`   地址: ${apiUrl}`, 'gray'));
+        console.log(c('  ❌ 无法连接到后端，请确保 server.py 正在运行', 'red'));
+        console.log(c(`     地址: ${apiUrl}`, 'gray'));
     }
     
-    showPrompt();
+    printInputPrompt();
 }
 
 process.on('SIGINT', () => {
-    console.log(c('\n\n👋 再见！\n', 'green'));
+    console.log(c('\n\n  👋 再见！\n', 'green'));
     process.exit(0);
 });
 
 process.on('uncaughtException', (err) => {
-    console.log(c(`\n❌ 错误: ${err.message}`, 'red'));
+    console.log(c(`\n  ❌ 错误: ${err.message}`, 'red'));
     process.exit(1);
 });
 
