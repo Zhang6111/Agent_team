@@ -1,11 +1,10 @@
 """Agent 基类 - 使用 LangChain Tool Calling"""
-from typing import Any, Optional
+from typing import Any, Optional, List
 from langchain_openai import ChatOpenAI
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
 from langchain_core.tools import BaseTool
 from src.config import settings
 from src.memory import session_memory, SessionMemory
-from src.mcp import embedded_mcp_client
 
 
 class BaseAgent:
@@ -18,7 +17,7 @@ class BaseAgent:
         system_prompt: str,
         model: Optional[str] = None,
         memory: Optional[SessionMemory] = None,
-        tools: Optional[list[BaseTool]] = None,
+        tools: Optional[List[BaseTool]] = None,
     ):
         self.name = name
         self.role = role
@@ -43,7 +42,7 @@ class BaseAgent:
         self._tools.append(tool)
         self.llm = self.llm.bind_tools(self._tools)
 
-    def set_tools(self, tools: list[BaseTool]) -> None:
+    def set_tools(self, tools: List[BaseTool]) -> None:
         self._tools = tools
         self.llm = self.llm.bind_tools(tools)
 
@@ -53,6 +52,8 @@ class BaseAgent:
         return self._invoke_direct(message, include_context)
 
     def _invoke_with_tools(self, message: str, include_context: bool = True) -> str:
+        messages = [SystemMessage(content=self.system_prompt)]
+        
         context = ""
         if include_context:
             context = self.memory.to_context_prompt()
@@ -61,28 +62,39 @@ class BaseAgent:
         if context:
             full_input = f"【上下文】\n{context}\n\n【任务】\n{message}"
 
-        messages = [SystemMessage(content=self.system_prompt)]
         messages.append(HumanMessage(content=full_input))
 
-        response = self.llm.invoke(messages)
+        max_iterations = 10
+        iteration = 0
 
-        if hasattr(response, "tool_calls") and response.tool_calls:
-            tool_results = []
+        while iteration < max_iterations:
+            iteration += 1
+            response = self.llm.invoke(messages)
+
+            if not hasattr(response, "tool_calls") or not response.tool_calls:
+                return response.content if hasattr(response, "content") else str(response)
+
+            messages.append(response)
+
             for tool_call in response.tool_calls:
                 tool_name = tool_call.get("name")
                 tool_args = tool_call.get("args", {})
+                
+                tool_result = self._execute_tool(tool_name, tool_args)
+                
+                messages.append(HumanMessage(content=f"工具 {tool_name} 执行结果: {tool_result}"))
+
+        return "达到最大迭代次数，任务可能未完成。"
+
+    def _execute_tool(self, tool_name: str, tool_args: dict) -> str:
+        for tool in self._tools:
+            if tool.name == tool_name:
                 try:
-                    result = embedded_mcp_client.call_tool(tool_name, tool_args)
-                    tool_results.append(f"\n[{tool_name}] 结果: {result}")
+                    result = tool._run(**tool_args)
+                    return result
                 except Exception as e:
-                    tool_results.append(f"\n[{tool_name}] 错误: {e}")
-
-            messages.append(response)
-            messages.append(HumanMessage(content=f"工具执行结果: {' '.join(tool_results)}"))
-            final_response = self.llm.invoke(messages)
-            return final_response.content
-
-        return response.content if hasattr(response, "content") else str(response)
+                    return f"工具执行错误: {e}"
+        return f"未找到工具: {tool_name}"
 
     def _invoke_direct(self, message: str, include_context: bool = True) -> str:
         messages = [SystemMessage(content=self.system_prompt)]
