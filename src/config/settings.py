@@ -29,6 +29,7 @@ class Settings:
     DEFAULT_MODEL: str = os.getenv("DEFAULT_MODEL", "deepseek-chat")
     TEMPERATURE: float = float(os.getenv("TEMPERATURE", "0.7"))
     MAX_TOKENS: int = int(os.getenv("MAX_TOKENS", "4096"))
+    TIMEOUT: int = int(os.getenv("TIMEOUT", "600"))  # 默认 10 分钟
 
     _config: dict = {}
     _agent_configs: dict = {}
@@ -61,12 +62,16 @@ class Settings:
                    expand_env_vars(cls._default_config.get("base_url")) or \
                    cls.BASE_URL
         
+        timeout = agent_config.get("timeout", cls.TIMEOUT)
+        
         return {
             "model": agent_config.get("model", cls.DEFAULT_MODEL),
             "temperature": float(agent_config.get("temperature", cls.TEMPERATURE)),
             "max_tokens": int(agent_config.get("max_tokens", cls.MAX_TOKENS)),
             "base_url": base_url,
             "api_key": api_key,
+            "timeout": timeout,
+            "request_timeout": timeout,
         }
 
     @classmethod
@@ -89,6 +94,8 @@ class Settings:
             "max_tokens": self.MAX_TOKENS,
             "base_url": self.BASE_URL,
             "api_key": self.API_KEY,
+            "timeout": self.TIMEOUT,
+            "request_timeout": self.TIMEOUT,
         }
 
 

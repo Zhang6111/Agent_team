@@ -5,16 +5,16 @@
 # 全局默认配置（可选，覆盖 .env）
 default:
   base_url: https://api.deepseek.com
-  api_key: ${DEEPSEEK_API_KEY}  # 支持环境变量引用
+  api_key: ${DEEPSEEK_API_KEY}
 
 agents:
-  # 产品经理 - 使用推理模型进行需求分析
+  # 产品经理 - 使用 chat 模型（更快）
   ProductManager:
-    model: deepseek-reasoner
+    model: deepseek-chat
     base_url: https://api.deepseek.com
-    api_key:  # 留空则使用全局配置
+    api_key:
     temperature: 0.5
-    max_tokens: 8192
+    max_tokens: 4096
 
   # 架构师 - 使用推理模型进行架构设计
   Architect:
@@ -103,31 +103,3 @@ agents:
     api_key:
     temperature: 0.7
     max_tokens: 4096
-
-# ============================================================
-# 示例：混合使用不同 API 提供商
-# ============================================================
-# agents:
-#   # 使用 OpenAI
-#   FrontendDev:
-#     model: gpt-4
-#     base_url: https://api.openai.com/v1
-#     api_key: sk-your-openai-key
-#     temperature: 0.3
-#     max_tokens: 8192
-#
-#   # 使用 Claude
-#   BackendDev:
-#     model: claude-3-opus-20240229
-#     base_url: https://api.anthropic.com/v1
-#     api_key: sk-ant-your-claude-key
-#     temperature: 0.3
-#     max_tokens: 8192
-#
-#   # 使用本地模型 (Ollama)
-#   Tester:
-#     model: llama3
-#     base_url: http://localhost:11434/v1
-#     api_key: ollama  # Ollama 不需要真实 key
-#     temperature: 0.5
-#     max_tokens: 4096
