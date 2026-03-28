@@ -5,8 +5,8 @@ from mcp.server.stdio import stdio_server
 from mcp.types import Tool, TextContent
 import asyncio
 import json
-
-from src.tools import FileTools, CommandTools
+import os
+from pathlib import Path
 
 
 class MCPToolsServer:
@@ -14,8 +14,6 @@ class MCPToolsServer:
 
     def __init__(self):
         self.server = Server("tools-server")
-        self.file_tools = FileTools()
-        self.command_tools = CommandTools()
         self._setup_handlers()
 
     def _setup_handlers(self):
@@ -31,15 +29,7 @@ class MCPToolsServer:
                     inputSchema={
                         "type": "object",
                         "properties": {
-                            "file_path": {
-                                "type": "string",
-                                "description": "文件路径（相对或绝对路径）",
-                            },
-                            "encoding": {
-                                "type": "string",
-                                "description": "文件编码，默认 utf-8",
-                                "default": "utf-8",
-                            },
+                            "file_path": {"type": "string", "description": "文件路径"},
                         },
                         "required": ["file_path"],
                     },
@@ -50,100 +40,10 @@ class MCPToolsServer:
                     inputSchema={
                         "type": "object",
                         "properties": {
-                            "file_path": {
-                                "type": "string",
-                                "description": "文件路径",
-                            },
-                            "content": {
-                                "type": "string",
-                                "description": "文件内容",
-                            },
-                            "encoding": {
-                                "type": "string",
-                                "description": "文件编码，默认 utf-8",
-                                "default": "utf-8",
-                            },
+                            "file_path": {"type": "string", "description": "文件路径"},
+                            "content": {"type": "string", "description": "文件内容"},
                         },
                         "required": ["file_path", "content"],
-                    },
-                ),
-                Tool(
-                    name="append_file",
-                    description="追加内容到文件",
-                    inputSchema={
-                        "type": "object",
-                        "properties": {
-                            "file_path": {
-                                "type": "string",
-                                "description": "文件路径",
-                            },
-                            "content": {
-                                "type": "string",
-                                "description": "追加的内容",
-                            },
-                        },
-                        "required": ["file_path", "content"],
-                    },
-                ),
-                Tool(
-                    name="file_exists",
-                    description="检查文件是否存在",
-                    inputSchema={
-                        "type": "object",
-                        "properties": {
-                            "file_path": {
-                                "type": "string",
-                                "description": "文件路径",
-                            },
-                        },
-                        "required": ["file_path"],
-                    },
-                ),
-                Tool(
-                    name="delete_file",
-                    description="删除文件",
-                    inputSchema={
-                        "type": "object",
-                        "properties": {
-                            "file_path": {
-                                "type": "string",
-                                "description": "文件路径",
-                            },
-                        },
-                        "required": ["file_path"],
-                    },
-                ),
-                Tool(
-                    name="create_directory",
-                    description="创建目录",
-                    inputSchema={
-                        "type": "object",
-                        "properties": {
-                            "dir_path": {
-                                "type": "string",
-                                "description": "目录路径",
-                            },
-                        },
-                        "required": ["dir_path"],
-                    },
-                ),
-                Tool(
-                    name="delete_directory",
-                    description="删除目录",
-                    inputSchema={
-                        "type": "object",
-                        "properties": {
-                            "dir_path": {
-                                "type": "string",
-                                "description": "目录路径",
-                            },
-                            "recursive": {
-                                "type": "boolean",
-                                "description": "是否递归删除",
-                                "default": False,
-                            },
-                        },
-                        "required": ["dir_path"],
                     },
                 ),
                 Tool(
@@ -152,131 +52,20 @@ class MCPToolsServer:
                     inputSchema={
                         "type": "object",
                         "properties": {
-                            "dir_path": {
-                                "type": "string",
-                                "description": "目录路径",
-                            },
+                            "dir_path": {"type": "string", "description": "目录路径"},
                         },
                         "required": ["dir_path"],
                     },
                 ),
                 Tool(
-                    name="copy_file",
-                    description="复制文件",
+                    name="create_directory",
+                    description="创建目录",
                     inputSchema={
                         "type": "object",
                         "properties": {
-                            "src": {
-                                "type": "string",
-                                "description": "源文件路径",
-                            },
-                            "dst": {
-                                "type": "string",
-                                "description": "目标文件路径",
-                            },
-                        },
-                        "required": ["src", "dst"],
-                    },
-                ),
-                Tool(
-                    name="move_file",
-                    description="移动文件",
-                    inputSchema={
-                        "type": "object",
-                        "properties": {
-                            "src": {
-                                "type": "string",
-                                "description": "源文件路径",
-                            },
-                            "dst": {
-                                "type": "string",
-                                "description": "目标文件路径",
-                            },
-                        },
-                        "required": ["src", "dst"],
-                    },
-                ),
-                Tool(
-                    name="get_file_size",
-                    description="获取文件大小（字节）",
-                    inputSchema={
-                        "type": "object",
-                        "properties": {
-                            "file_path": {
-                                "type": "string",
-                                "description": "文件路径",
-                            },
-                        },
-                        "required": ["file_path"],
-                    },
-                ),
-                Tool(
-                    name="get_file_extension",
-                    description="获取文件扩展名",
-                    inputSchema={
-                        "type": "object",
-                        "properties": {
-                            "file_path": {
-                                "type": "string",
-                                "description": "文件路径",
-                            },
-                        },
-                        "required": ["file_path"],
-                    },
-                ),
-                Tool(
-                    name="search_files",
-                    description="搜索文件",
-                    inputSchema={
-                        "type": "object",
-                        "properties": {
-                            "dir_path": {
-                                "type": "string",
-                                "description": "搜索目录",
-                            },
-                            "pattern": {
-                                "type": "string",
-                                "description": "文件名模式（如 *.py）",
-                                "default": "*",
-                            },
-                            "recursive": {
-                                "type": "boolean",
-                                "description": "是否递归搜索",
-                                "default": False,
-                            },
+                            "dir_path": {"type": "string", "description": "目录路径"},
                         },
                         "required": ["dir_path"],
-                    },
-                ),
-                Tool(
-                    name="run_command",
-                    description="执行系统命令",
-                    inputSchema={
-                        "type": "object",
-                        "properties": {
-                            "command": {
-                                "type": "string",
-                                "description": "要执行的命令",
-                            },
-                            "cwd": {
-                                "type": "string",
-                                "description": "工作目录（可选）",
-                            },
-                            "timeout": {
-                                "type": "integer",
-                                "description": "超时时间（秒）",
-                                "default": 60,
-                            },
-                        },
-                        "required": ["command"],
-                    },
-                ),
-                Tool(
-                    name="get_current_directory",
-                    description="获取当前工作目录",
-                    inputSchema={
-                        "type": "object",
-                        "properties": {},
                     },
                 ),
             ]
@@ -293,63 +82,35 @@ class MCPToolsServer:
     async def _execute_tool(self, name: str, arguments: dict) -> Any:
         """执行工具"""
         if name == "read_file":
-            return self.file_tools.read_file(
-                arguments["file_path"],
-                arguments.get("encoding", "utf-8")
-            )
+            try:
+                with open(arguments["file_path"], "r", encoding="utf-8") as f:
+                    return {"content": f.read()}
+            except Exception as e:
+                return {"error": str(e)}
+
         elif name == "write_file":
-            success = self.file_tools.write_file(
-                arguments["file_path"],
-                arguments["content"],
-                arguments.get("encoding", "utf-8")
-            )
-            return {"success": success}
-        elif name == "append_file":
-            success = self.file_tools.append_file(
-                arguments["file_path"],
-                arguments["content"]
-            )
-            return {"success": success}
-        elif name == "file_exists":
-            return self.file_tools.file_exists(arguments["file_path"])
-        elif name == "delete_file":
-            return {"success": self.file_tools.delete_file(arguments["file_path"])}
-        elif name == "create_directory":
-            return {"success": self.file_tools.create_directory(arguments["dir_path"])}
-        elif name == "delete_directory":
-            return {"success": self.file_tools.delete_directory(
-                arguments["dir_path"],
-                arguments.get("recursive", False)
-            )}
+            try:
+                path = Path(arguments["file_path"])
+                path.parent.mkdir(parents=True, exist_ok=True)
+                with open(path, "w", encoding="utf-8") as f:
+                    f.write(arguments["content"])
+                return {"success": True, "message": f"文件已创建: {path}"}
+            except Exception as e:
+                return {"error": str(e)}
+
         elif name == "list_directory":
-            return self.file_tools.list_directory(arguments["dir_path"])
-        elif name == "copy_file":
-            return {"success": self.file_tools.copy_file(arguments["src"], arguments["dst"])}
-        elif name == "move_file":
-            return {"success": self.file_tools.move_file(arguments["src"], arguments["dst"])}
-        elif name == "get_file_size":
-            return self.file_tools.get_file_size(arguments["file_path"])
-        elif name == "get_file_extension":
-            return self.file_tools.get_file_extension(arguments["file_path"])
-        elif name == "search_files":
-            return self.file_tools.search_files(
-                arguments["dir_path"],
-                arguments.get("pattern", "*"),
-                arguments.get("recursive", False)
-            )
-        elif name == "run_command":
-            returncode, stdout, stderr = self.command_tools.run_command(
-                arguments["command"],
-                cwd=arguments.get("cwd"),
-                timeout=arguments.get("timeout", 60)
-            )
-            return {
-                "returncode": returncode,
-                "stdout": stdout,
-                "stderr": stderr
-            }
-        elif name == "get_current_directory":
-            return self.command_tools.get_current_directory()
+            try:
+                return os.listdir(arguments["dir_path"])
+            except Exception as e:
+                return {"error": str(e)}
+
+        elif name == "create_directory":
+            try:
+                Path(arguments["dir_path"]).mkdir(parents=True, exist_ok=True)
+                return {"success": True}
+            except Exception as e:
+                return {"error": str(e)}
+
         else:
             raise ValueError(f"Unknown tool: {name}")
 
