@@ -1,0 +1,133 @@
+# Agent 模型配置文件
+# 每个 Agent 可以独立配置不同的 LLM 模型
+# 未配置的 Agent 将使用 .env 中的默认配置
+
+# 全局默认配置（可选，覆盖 .env）
+default:
+  base_url: https://api.deepseek.com
+  api_key: ${DEEPSEEK_API_KEY}  # 支持环境变量引用
+
+agents:
+  # 产品经理 - 使用推理模型进行需求分析
+  ProductManager:
+    model: deepseek-reasoner
+    base_url: https://api.deepseek.com
+    api_key:  # 留空则使用全局配置
+    temperature: 0.5
+    max_tokens: 8192
+
+  # 架构师 - 使用推理模型进行架构设计
+  Architect:
+    model: deepseek-reasoner
+    base_url: https://api.deepseek.com
+    api_key:
+    temperature: 0.3
+    max_tokens: 8192
+
+  # 数据工程师
+  DataEngineer:
+    model: deepseek-chat
+    base_url: https://api.deepseek.com
+    api_key:
+    temperature: 0.5
+    max_tokens: 4096
+
+  # UI设计师
+  UIDesigner:
+    model: deepseek-chat
+    base_url: https://api.deepseek.com
+    api_key:
+    temperature: 0.7
+    max_tokens: 4096
+
+  # 前端开发 - 使用代码模型
+  FrontendDev:
+    model: deepseek-chat
+    base_url: https://api.deepseek.com
+    api_key:
+    temperature: 0.3
+    max_tokens: 8192
+
+  # 后端开发 - 使用代码模型
+  BackendDev:
+    model: deepseek-chat
+    base_url: https://api.deepseek.com
+    api_key:
+    temperature: 0.3
+    max_tokens: 8192
+
+  # 代码评审
+  CodeReviewer:
+    model: deepseek-chat
+    base_url: https://api.deepseek.com
+    api_key:
+    temperature: 0.2
+    max_tokens: 4096
+
+  # 测试工程师
+  Tester:
+    model: deepseek-chat
+    base_url: https://api.deepseek.com
+    api_key:
+    temperature: 0.5
+    max_tokens: 4096
+
+  # 安全审计
+  SecurityAuditor:
+    model: deepseek-chat
+    base_url: https://api.deepseek.com
+    api_key:
+    temperature: 0.2
+    max_tokens: 4096
+
+  # 性能优化
+  PerformanceOptimizer:
+    model: deepseek-chat
+    base_url: https://api.deepseek.com
+    api_key:
+    temperature: 0.3
+    max_tokens: 4096
+
+  # 运维工程师
+  DevOps:
+    model: deepseek-chat
+    base_url: https://api.deepseek.com
+    api_key:
+    temperature: 0.3
+    max_tokens: 4096
+
+  # 技术文档
+  TechnicalWriter:
+    model: deepseek-chat
+    base_url: https://api.deepseek.com
+    api_key:
+    temperature: 0.7
+    max_tokens: 4096
+
+# ============================================================
+# 示例：混合使用不同 API 提供商
+# ============================================================
+# agents:
+#   # 使用 OpenAI
+#   FrontendDev:
+#     model: gpt-4
+#     base_url: https://api.openai.com/v1
+#     api_key: sk-your-openai-key
+#     temperature: 0.3
+#     max_tokens: 8192
+#
+#   # 使用 Claude
+#   BackendDev:
+#     model: claude-3-opus-20240229
+#     base_url: https://api.anthropic.com/v1
+#     api_key: sk-ant-your-claude-key
+#     temperature: 0.3
+#     max_tokens: 8192
+#
+#   # 使用本地模型 (Ollama)
+#   Tester:
+#     model: llama3
+#     base_url: http://localhost:11434/v1
+#     api_key: ollama  # Ollama 不需要真实 key
+#     temperature: 0.5
+#     max_tokens: 4096

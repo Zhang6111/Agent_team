@@ -141,7 +141,9 @@ class CLIExecutor:
             print(f"   大小：{len(content)} 字节")
         
         # 创建目录
-        os.makedirs(os.path.dirname(full_path), exist_ok=True)
+        dir_path = os.path.dirname(full_path)
+        if dir_path:
+            os.makedirs(dir_path, exist_ok=True)
         
         # 写入文件
         with open(full_path, "w", encoding="utf-8") as f:

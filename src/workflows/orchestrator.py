@@ -47,10 +47,30 @@ class Task:
 class WorkflowEngine:
     """工作流引擎 - 编排多 Agent 协作"""
 
+    AGENT_DESCRIPTIONS = {
+        "ProductManager": "产品经理 - 分析业务需求，制定产品规格，输出需求文档",
+        "Architect": "架构师 - 设计系统技术架构，选型技术栈，制定开发规范",
+        "UIDesigner": "UI 设计师 - 设计用户界面，制定视觉规范，输出设计稿",
+        "DataEngineer": "数据工程师 - 设计数据库模型，数据管道，数据处理逻辑",
+        "FrontendDev": "前端开发 - 实现 Web/React/Vue 前端界面和交互",
+        "BackendDev": "后端开发 - 实现服务端 API，业务逻辑，数据库操作",
+        "CodeReviewer": "代码评审 - 审查代码质量，发现潜在问题，提出改进建议",
+        "Tester": "测试工程师 - 编写测试用例，执行测试，报告 Bug",
+        "SecurityAuditor": "安全审计 - 审查安全漏洞，提出安全加固方案",
+        "PerformanceOptimizer": "性能优化 - 分析性能瓶颈，提出优化方案",
+        "DevOps": "DevOps - 部署上线，CI/CD，容器化，运维自动化",
+        "TechnicalWriter": "技术写作 - 撰写技术文档，API 文档，使用手册",
+    }
+
     def __init__(self):
         self.tasks: dict[str, Task] = {}
         self.listeners: dict[str, list[Callable]] = {}
         self._execution_order: list[str] = []
+
+    def clear(self):
+        """清除所有任务（新一轮工作流前调用）"""
+        self.tasks.clear()
+        self._execution_order.clear()
 
     def create_task(
         self,
@@ -71,8 +91,32 @@ class WorkflowEngine:
         self.tasks[task.id] = task
         return task
 
+    def create_tasks_from_plan(self, plan: list[dict]) -> list[Task]:
+        """
+        根据 LLM 规划结果创建任务序列。
+        plan 格式：[{"name": str, "assignee": str, "description": str, "depends_on": [int]}, ...]
+        depends_on 中的数字是 plan 列表的索引（0-based）。
+        """
+        created: list[Task] = []
+        for idx, step in enumerate(plan):
+            # 过滤非数字、越界或无效依赖，以提高系统健壮性
+            valid_depends = []
+            for d in step.get("depends_on", []):
+                if isinstance(d, int) and 0 <= d < len(created):
+                    valid_depends.append(created[d].id)
+                    
+            task = self.create_task(
+                name=step.get("name", f"任务{idx+1}"),
+                description=step.get("description", ""),
+                assignee=step.get("assignee"),
+                dependencies=valid_depends,
+            )
+            created.append(task)
+        return created
+
+    # ---- 保留旧方法作为兜底（不再主动调用）----
     def create_tasks_from_requirement(self, requirement: str) -> list[Task]:
-        """根据需求自动创建任务序列"""
+        """【兜底】根据需求自动创建完整任务序列（仅在 LLM 规划失败时使用）"""
         tasks = []
 
         task1 = self.create_task(
@@ -85,7 +129,7 @@ class WorkflowEngine:
 
         task2 = self.create_task(
             name="架构设计",
-            description=f"设计技术架构",
+            description="设计技术架构",
             task_type=TaskType.DESIGN,
             assignee="Architect",
             dependencies=[task1.id],
@@ -93,58 +137,22 @@ class WorkflowEngine:
         tasks.append(task2)
 
         task3 = self.create_task(
-            name="UI设计",
-            description=f"设计用户界面",
-            task_type=TaskType.DESIGN,
-            assignee="UIDesigner",
-            dependencies=[task1.id],
-        )
-        tasks.append(task3)
-
-        task4 = self.create_task(
             name="后端开发",
-            description=f"实现后端代码",
+            description="实现后端代码",
             task_type=TaskType.IMPLEMENTATION,
             assignee="BackendDev",
             dependencies=[task2.id],
         )
-        tasks.append(task4)
+        tasks.append(task3)
 
-        task5 = self.create_task(
-            name="前端开发",
-            description=f"实现前端代码",
-            task_type=TaskType.IMPLEMENTATION,
-            assignee="FrontendDev",
-            dependencies=[task3.id],
-        )
-        tasks.append(task5)
-
-        task6 = self.create_task(
+        task4 = self.create_task(
             name="代码评审",
-            description=f"审查代码质量",
+            description="审查代码质量",
             task_type=TaskType.REVIEW,
             assignee="CodeReviewer",
-            dependencies=[task4.id, task5.id],
+            dependencies=[task3.id],
         )
-        tasks.append(task6)
-
-        task7 = self.create_task(
-            name="测试",
-            description=f"功能测试",
-            task_type=TaskType.TEST,
-            assignee="Tester",
-            dependencies=[task6.id],
-        )
-        tasks.append(task7)
-
-        task8 = self.create_task(
-            name="部署",
-            description=f"部署上线",
-            task_type=TaskType.DEPLOY,
-            assignee="DevOps",
-            dependencies=[task7.id],
-        )
-        tasks.append(task8)
+        tasks.append(task4)
 
         return tasks
 
@@ -238,7 +246,6 @@ class WorkflowEngine:
         """执行工作流"""
         results = []
 
-        # 检查是否有可执行的任务
         if not self.tasks:
             return results
 

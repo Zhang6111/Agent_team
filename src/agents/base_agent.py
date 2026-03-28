@@ -9,7 +9,7 @@ from src.mcp import embedded_mcp_client
 
 
 class BaseAgent:
-    """Agent 基类 - 支持 Tool Calling"""
+    """Agent 基类 - 支持 Tool Calling 和独立模型配置"""
 
     def __init__(
         self,
@@ -25,9 +25,11 @@ class BaseAgent:
         self.system_prompt = system_prompt
         self.memory = memory or session_memory
 
-        config = settings.llm_config.copy()
+        config = settings.get_agent_config(name)
         if model:
             config["model"] = model
+        
+        self._model_name = config["model"]
         self.llm = ChatOpenAI(**config)
 
         self._tools = tools or []
@@ -35,26 +37,22 @@ class BaseAgent:
             self.llm = self.llm.bind_tools(self._tools)
 
     def __repr__(self) -> str:
-        return f"{self.__class__.__name__}(name={self.name}, role={self.role})"
+        return f"{self.__class__.__name__}(name={self.name}, role={self.role}, model={self._model_name})"
 
     def add_tool(self, tool: BaseTool) -> None:
-        """添加工具"""
         self._tools.append(tool)
         self.llm = self.llm.bind_tools(self._tools)
 
     def set_tools(self, tools: list[BaseTool]) -> None:
-        """设置工具列表"""
         self._tools = tools
         self.llm = self.llm.bind_tools(tools)
 
     def invoke(self, message: str, include_context: bool = True) -> str:
-        """调用 Agent 处理消息"""
         if self._tools:
             return self._invoke_with_tools(message, include_context)
         return self._invoke_direct(message, include_context)
 
     def _invoke_with_tools(self, message: str, include_context: bool = True) -> str:
-        """使用 Tool Calling 调用"""
         context = ""
         if include_context:
             context = self.memory.to_context_prompt()
@@ -87,7 +85,6 @@ class BaseAgent:
         return response.content if hasattr(response, "content") else str(response)
 
     def _invoke_direct(self, message: str, include_context: bool = True) -> str:
-        """直接调用 LLM"""
         messages = [SystemMessage(content=self.system_prompt)]
 
         if include_context:
