@@ -2,7 +2,7 @@
 
 /**
  * Multi-Agent Team CLI - 手动模式
- * 参考 Qwen Code 的简洁设计
+ * 简洁界面设计
  */
 
 const WebSocket = require('ws');
@@ -38,6 +38,8 @@ const state = {
     currentAgent: 'ProductManager',
     workDir: process.cwd(),
     contextUsed: '0.0%',
+    processingStatus: '',
+    outputLines: [],
 };
 
 const args = process.argv.slice(2);
@@ -80,25 +82,13 @@ function clear() {
     readline.clearScreenDown(process.stdout);
 }
 
+function moveCursor(row) {
+    readline.cursorTo(process.stdout, 0, row);
+}
+
 const spinnerFrames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 let spinnerInterval = null;
-
-function startSpinner(text = '处理中') {
-    let frame = 0;
-    spinnerInterval = setInterval(() => {
-        readline.cursorTo(process.stdout, 0);
-        process.stdout.write(c(`${spinnerFrames[frame]} ${text}`, 'cyan'));
-        frame = (frame + 1) % spinnerFrames.length;
-    }, 100);
-}
-
-function stopSpinner() {
-    if (spinnerInterval) {
-        clearInterval(spinnerInterval);
-        spinnerInterval = null;
-        readline.clearLine(process.stdout, 0);
-    }
-}
+let currentSpinnerFrame = 0;
 
 const agentEmoji = {
     ProductManager: '📋',
@@ -116,6 +106,7 @@ const agentEmoji = {
 };
 
 const agentKeys = {
+    '0': 'PerformanceOptimizer',
     '1': 'ProductManager',
     '2': 'Architect',
     '3': 'DataEngineer',
@@ -125,50 +116,125 @@ const agentKeys = {
     '7': 'CodeReviewer',
     '8': 'Tester',
     '9': 'SecurityAuditor',
-    '0': 'PerformanceOptimizer',
     '-': 'DevOps',
     '=': 'TechnicalWriter',
 };
 
+function getTerminalHeight() {
+    return process.stdout.rows || 24;
+}
+
+function getOutputAreaHeight() {
+    return getTerminalHeight() - 8;
+}
+
 function printHeader() {
-    const logo = `
-   ▄▄▄▄▄▄  ▄▄     ▄▄ ▄▄▄▄▄▄▄ ▄▄▄    ▄▄   ┌──────────────────────────────────────────────────────────┐
-  ██╔═══██╗██║    ██║██╔════╝████╗  ██║  │${c(' >_ Multi-Agent Team ', 'cyan')}v3.0.0${' '.repeat(32)}│
-  ██║   ██║██║ █╗ ██║█████╗  ██╔██╗ ██║  │                                                          │
-  ██║▄▄ ██║██║███╗██║██╔══╝  ██║╚██╗██║  │ ${c(state.currentAgent, 'green')} ${agentEmoji[state.currentAgent] || '🤖'}${' '.repeat(55 - state.currentAgent.length)}│
-  ╚██████╔╝╚███╔███╔╝███████╗██║ ╚████║  │ ${c(state.workDir.substring(0, 50), 'gray')}${' '.repeat(50 - Math.min(state.workDir.length, 50))}│
-   ╚═════╝  ╚══╝╚══╝ ╚══════╝╚═╝  ╚═══╝  └──────────────────────────────────────────────────────────┘
-`;
-    console.log(logo);
+    const emoji = agentEmoji[state.currentAgent] || '🤖';
+    const status = state.connected ? c('●', 'green') : c('○', 'red');
+    
+    console.log(c('┌' + '─'.repeat(78) + '┐', 'cyan'));
+    console.log(c('│', 'cyan') + c('  Agent Team ', 'bold') + c('v3.0.0', 'gray') + ' '.repeat(52) + c('│', 'cyan'));
+    console.log(c('│', 'cyan') + ' '.repeat(78) + c('│', 'cyan'));
+    console.log(c('│', 'cyan') + `  ${status} ${emoji} ${state.currentAgent}` + ' '.repeat(78 - 6 - state.currentAgent.length) + c('│', 'cyan'));
+    console.log(c('│', 'cyan') + `  ${c(state.workDir.substring(0, 70), 'gray')}` + ' '.repeat(78 - 4 - Math.min(state.workDir.length, 70)) + c('│', 'cyan'));
+    console.log(c('└' + '─'.repeat(78) + '┘', 'cyan'));
 }
 
-function printSeparator() {
-    console.log(c('─'.repeat(120), 'gray'));
-}
-
-function printInputPrompt() {
-    console.log();
-    rl.question(c('> ', 'green'), handleInput);
-}
-
-function printStatus() {
-    const status = state.connected ? c('● 已连接', 'green') : c('○ 未连接', 'red');
-    console.log(`  ${status}  │  ${c(state.contextUsed, 'cyan')} context used`);
-    console.log();
-}
-
-function printAgentQuickSwitch() {
+function printAgentBar() {
     const agents = Object.entries(agentKeys);
-    const current = state.currentAgent;
     let line = '  ';
     agents.forEach(([key, name]) => {
         const emoji = agentEmoji[name] || '🤖';
-        const isCurrent = name === current;
+        const isCurrent = name === state.currentAgent;
         const text = isCurrent ? c(`[${key}]${emoji}`, 'green') : c(`[${key}]${emoji}`, 'gray');
         line += text + ' ';
     });
+    line += c('  ? 帮助', 'dim');
     console.log(line);
-    console.log(c('  按 ? 查看快捷键', 'gray'));
+}
+
+function printSeparator() {
+    console.log(c('─'.repeat(80), 'gray'));
+}
+
+function printOutput() {
+    const maxHeight = getOutputAreaHeight();
+    const lines = state.outputLines.slice(-maxHeight);
+    
+    lines.forEach(line => {
+        console.log(line);
+    });
+    
+    const emptyLines = maxHeight - lines.length;
+    for (let i = 0; i < emptyLines; i++) {
+        console.log();
+    }
+}
+
+function printInputArea() {
+    const height = getTerminalHeight();
+    moveCursor(height - 2);
+    readline.clearLine(process.stdout, 0);
+    
+    if (state.isProcessing) {
+        const frame = spinnerFrames[currentSpinnerFrame];
+        const statusText = state.processingStatus || '处理中';
+        console.log(c(`  ${frame} ${statusText}`, 'cyan'));
+    } else {
+        console.log(c('  输入您的消息或 @ 文件路径', 'gray'));
+    }
+    
+    moveCursor(height - 1);
+    readline.clearLine(process.stdout, 0);
+    process.stdout.write(c('> ', 'green'));
+}
+
+function addOutput(text, type = 'normal') {
+    const lines = text.split('\n');
+    lines.forEach(line => {
+        if (type === 'user') {
+            state.outputLines.push(c(`  > ${line}`, 'green'));
+        } else if (type === 'agent') {
+            state.outputLines.push(`  ${line}`);
+        } else if (type === 'system') {
+            state.outputLines.push(c(`  ${line}`, 'yellow'));
+        } else if (type === 'error') {
+            state.outputLines.push(c(`  ❌ ${line}`, 'red'));
+        } else {
+            state.outputLines.push(`  ${line}`);
+        }
+    });
+    refreshScreen();
+}
+
+function refreshScreen() {
+    clear();
+    printHeader();
+    printAgentBar();
+    printSeparator();
+    printOutput();
+    printSeparator();
+    printInputArea();
+}
+
+function startSpinner(text) {
+    state.isProcessing = true;
+    state.processingStatus = text;
+    currentSpinnerFrame = 0;
+    
+    spinnerInterval = setInterval(() => {
+        currentSpinnerFrame = (currentSpinnerFrame + 1) % spinnerFrames.length;
+        printInputArea();
+    }, 100);
+}
+
+function stopSpinner() {
+    state.isProcessing = false;
+    state.processingStatus = '';
+    if (spinnerInterval) {
+        clearInterval(spinnerInterval);
+        spinnerInterval = null;
+    }
 }
 
 let ws = null;
@@ -217,54 +283,36 @@ function handleWsMessage(msg) {
 async function sendMessage(message) {
     if (state.isProcessing) return;
 
-    state.isProcessing = true;
-    
-    console.log();
-    console.log(c(`> ${message}`, 'green'));
+    addOutput(message, 'user');
+    startSpinner(`${agentEmoji[state.currentAgent]} ${state.currentAgent} 正在思考...`);
 
     try {
-        startSpinner(`${state.currentAgent} 正在处理...`);
-        
         const response = await axios.post(`${apiUrl}/chat`, {
             message: message,
             agent: state.currentAgent,
-            work_dir: state.work_dir,
+            work_dir: state.workDir,
         }, { timeout: 300000 });
 
         stopSpinner();
         
         const { agent, response: reply } = response.data;
         
-        console.log();
-        printAgentResponse(reply, agent);
+        addOutput(reply, 'agent');
         
         state.contextUsed = `${(Math.random() * 5 + 1).toFixed(1)}%`;
         
     } catch (error) {
         stopSpinner();
         if (error.code === 'ECONNREFUSED') {
-            console.log(c('\n❌ 无法连接到后端 API', 'red'));
+            addOutput('无法连接到后端 API', 'error');
         } else if (error.response) {
-            console.log(c(`\n❌ 错误: ${error.response.data.detail || error.message}`, 'red'));
+            addOutput(error.response.data.detail || error.message, 'error');
         } else {
-            console.log(c(`\n❌ 错误: ${error.message}`, 'red'));
+            addOutput(error.message, 'error');
         }
-    } finally {
-        state.isProcessing = false;
-        printSeparator();
-        printInputPrompt();
     }
-}
-
-function printAgentResponse(content, agent) {
-    const emoji = agentEmoji[agent] || '🤖';
-    const lines = content.split('\n');
     
-    lines.forEach((line, i) => {
-        if (line.trim()) {
-            console.log(`  ${line}`);
-        }
-    });
+    refreshScreen();
 }
 
 function switchAgent(key) {
@@ -272,10 +320,8 @@ function switchAgent(key) {
     if (agentName) {
         state.currentAgent = agentName;
         const emoji = agentEmoji[agentName] || '🤖';
-        console.log();
-        console.log(c(`  ✦ 已切换到: ${emoji} ${agentName}`, 'yellow'));
-        printSeparator();
-        printInputPrompt();
+        addOutput(`已切换到: ${emoji} ${agentName}`, 'system');
+        refreshScreen();
         return true;
     }
     return false;
@@ -285,7 +331,7 @@ function handleInput(input) {
     const message = input.trim();
     
     if (!message) {
-        printInputPrompt();
+        refreshScreen();
         return;
     }
     
@@ -299,35 +345,22 @@ function handleInput(input) {
                 process.exit(0);
             case '/clear':
             case '/cls':
-                clear();
-                printHeader();
-                printStatus();
-                printAgentQuickSwitch();
-                printSeparator();
-                printInputPrompt();
+                state.outputLines = [];
+                refreshScreen();
                 break;
             case '/agents':
             case '/list':
                 printAgentList();
-                printInputPrompt();
                 break;
             case '/status':
-                clear();
-                printHeader();
-                printStatus();
-                printAgentQuickSwitch();
-                printSeparator();
-                printInputPrompt();
+                refreshScreen();
                 break;
             case '/help':
             case '?':
                 printHelp();
-                printInputPrompt();
                 break;
             default:
-                console.log(c(`\n  ❓ 未知命令: ${message}`, 'yellow'));
-                printSeparator();
-                printInputPrompt();
+                addOutput(`未知命令: ${message}`, 'system');
         }
         return;
     }
@@ -341,42 +374,36 @@ function handleInput(input) {
 }
 
 function printAgentList() {
-    console.log();
-    console.log(c('  ┌─────────────────── Agent 列表 ───────────────────┐', 'cyan'));
+    addOutput('┌─────────────────── Agent 列表 ───────────────────┐', 'system');
     Object.entries(agentKeys).forEach(([key, name]) => {
         const emoji = agentEmoji[name] || '🤖';
-        const marker = name === state.currentAgent ? c(' ◄ 当前', 'green') : '';
-        console.log(c('  │', 'cyan') + c(` [${key}] ${emoji} ${name.padEnd(18)}`, 'white') + marker);
+        const marker = name === state.currentAgent ? ' ◄ 当前' : '';
+        addOutput(`│ [${key}] ${emoji} ${name}${marker}`, 'system');
     });
-    console.log(c('  └────────────────────────────────────────────────┘', 'cyan'));
+    addOutput('└────────────────────────────────────────────────┘', 'system');
 }
 
 function printHelp() {
-    console.log();
-    console.log(c('  ┌─────────────────── 快捷键 ───────────────────┐', 'cyan'));
-    console.log(c('  │', 'cyan') + '  1-9, 0, -, =    切换 Agent                ' + c('│', 'cyan'));
-    console.log(c('  │', 'cyan') + '  /agents         列出所有 Agent            ' + c('│', 'cyan'));
-    console.log(c('  │', 'cyan') + '  /status         查看状态                  ' + c('│', 'cyan'));
-    console.log(c('  │', 'cyan') + '  /clear          清屏                      ' + c('│', 'cyan'));
-    console.log(c('  │', 'cyan') + '  /exit           退出                      ' + c('│', 'cyan'));
-    console.log(c('  └────────────────────────────────────────────┘', 'cyan'));
+    addOutput('┌─────────────────── 快捷键 ───────────────────┐', 'system');
+    addOutput('│  0-9, -, =       切换 Agent                 │', 'system');
+    addOutput('│  /agents         列出所有 Agent             │', 'system');
+    addOutput('│  /clear          清屏                       │', 'system');
+    addOutput('│  /exit           退出                       │', 'system');
+    addOutput('└────────────────────────────────────────────┘', 'system');
 }
 
 async function start() {
-    clear();
-    printHeader();
+    refreshScreen();
     
     try {
         await connectWebSocket();
-        printStatus();
-        printAgentQuickSwitch();
-        printSeparator();
+        refreshScreen();
     } catch (err) {
-        console.log(c('  ❌ 无法连接到后端，请确保 server.py 正在运行', 'red'));
-        console.log(c(`     地址: ${apiUrl}`, 'gray'));
+        addOutput('无法连接到后端，请确保 server.py 正在运行', 'error');
+        addOutput(`地址: ${apiUrl}`, 'system');
     }
     
-    printInputPrompt();
+    rl.on('line', handleInput);
 }
 
 process.on('SIGINT', () => {
@@ -387,6 +414,10 @@ process.on('SIGINT', () => {
 process.on('uncaughtException', (err) => {
     console.log(c(`\n  ❌ 错误: ${err.message}`, 'red'));
     process.exit(1);
+});
+
+process.stdout.on('resize', () => {
+    refreshScreen();
 });
 
 start();
