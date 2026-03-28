@@ -1,7 +1,7 @@
 """Agent 基类 - 使用 LangChain Tool Calling"""
 from typing import Any, Optional, List
 from langchain_openai import ChatOpenAI
-from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
+from langchain_core.messages import HumanMessage, SystemMessage, AIMessage, ToolMessage
 from langchain_core.tools import BaseTool
 from src.config import settings
 from src.memory import session_memory, SessionMemory
@@ -79,10 +79,14 @@ class BaseAgent:
             for tool_call in response.tool_calls:
                 tool_name = tool_call.get("name")
                 tool_args = tool_call.get("args", {})
+                tool_call_id = tool_call.get("id", "")
                 
                 tool_result = self._execute_tool(tool_name, tool_args)
                 
-                messages.append(HumanMessage(content=f"工具 {tool_name} 执行结果: {tool_result}"))
+                messages.append(ToolMessage(
+                    content=str(tool_result),
+                    tool_call_id=tool_call_id
+                ))
 
         return "达到最大迭代次数，任务可能未完成。"
 
