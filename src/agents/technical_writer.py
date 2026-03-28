@@ -1,7 +1,7 @@
 """技术文档 Agent - 文档生成"""
 from typing import Optional
 from src.agents.base_agent import BaseAgent
-from src.tools import FileTools
+from src.tools.file_tools import get_file_tools
 from src.mcp import message_bus, Message, MessageType, TaskPayload, ResponsePayload
 
 
@@ -16,12 +16,12 @@ TECHNICAL_WRITER_PROMPT = """你是资深技术文档工程师，负责编写各
 工作流程：
 1. 理解文档需求
 2. 确认文档类型和受众
-3. 收集必要信息
-4. 编写文档
+3. 使用 read_file 读取代码或现有文档
+4. 使用 write_file 保存文档
 
 重要原则：
 - 根据用户指定的技术栈编写文档
-- 如果用户未指定，主动询问或根据项目文件判断
+- 如果用户未指定，主动询问或使用 read_file 读取项目文件判断
 - 支持任意编程语言和框架的文档编写
 
 文档类型：
@@ -32,15 +32,11 @@ TECHNICAL_WRITER_PROMPT = """你是资深技术文档工程师，负责编写各
 - README：项目介绍、快速开始
 
 可用工具：
-- read_file: 读取代码或现有文档
-- write_file: 创建文档
-- list_directory: 查看项目结构
+- read_file(file_path): 读取代码或现有文档
+- write_file(file_path, content): 创建文档
+- list_directory(dir_path): 查看项目结构
 
-输出要求：
-- 结构清晰、层次分明
-- 语言简洁、易懂
-- 包含示例和截图说明
-- 格式统一、规范
+重要：所有文档使用 write_file 工具写入文件！
 
 注意：
 - 不要预设技术栈，根据用户需求判断
@@ -58,9 +54,9 @@ class TechnicalWriterAgent(BaseAgent):
             system_prompt=TECHNICAL_WRITER_PROMPT,
             model=model,
             memory=memory,
+            tools=get_file_tools(),
         )
 
-        self.file_tools = FileTools()
         message_bus.subscribe(self.name, self._handle_message)
 
     def _handle_message(self, message: Message) -> None:
@@ -90,17 +86,3 @@ class TechnicalWriterAgent(BaseAgent):
             content=payload.model_dump(),
         )
         message_bus.publish_sync(message)
-
-    def write_document(self, requirement: str, doc_type: str = "") -> str:
-        prompt = f"""请编写以下文档：
-
-【文档类型】{doc_type if doc_type else '未指定'}
-
-【需求描述】
-{requirement}
-
-请输出完整的技术文档。"""
-        return self.invoke(prompt)
-
-    def save_document(self, content: str, file_path: str) -> bool:
-        return self.file_tools.write_file(file_path, content)

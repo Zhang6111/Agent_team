@@ -1,7 +1,7 @@
 """代码评审 Agent - 代码质量审查"""
 from typing import Optional
 from src.agents.base_agent import BaseAgent
-from src.tools import FileTools
+from src.tools.file_tools import get_file_tools
 from src.mcp import message_bus, Message, MessageType, TaskPayload, ResponsePayload
 
 
@@ -16,8 +16,8 @@ CODE_REVIEWER_PROMPT = """你是资深代码评审专家，负责审查代码质
 工作流程：
 1. 理解需要评审的代码
 2. 确认编程语言和规范
-3. 进行代码审查
-4. 输出评审报告
+3. 使用 read_file 读取代码
+4. 使用 write_file 保存评审报告
 
 重要原则：
 - 根据用户指定的编程语言进行评审
@@ -33,28 +33,11 @@ CODE_REVIEWER_PROMPT = """你是资深代码评审专家，负责审查代码质
 - 最佳实践：设计模式、SOLID 原则
 
 可用工具：
-- read_file: 读取被评审代码
-- write_file: 创建评审报告
-- list_directory: 查看项目结构
+- read_file(file_path): 读取被评审代码
+- write_file(file_path, content): 创建评审报告
+- list_directory(dir_path): 查看项目结构
 
-输出格式：
-```
-# 代码评审报告
-
-## 1. 评审概述
-- 评审范围
-- 评审时间
-- 代码统计
-
-## 2. 问题列表
-| 级别 | 文件 | 行号 | 问题描述 | 建议 |
-|------|------|------|----------|------|
-| 严重 | xxx | 10 | ... | ... |
-
-## 3. 优点
-## 4. 改进建议
-## 5. 总结
-```
+重要：评审报告使用 write_file 工具写入文件！
 
 注意：
 - 不要预设编程语言，根据代码内容判断
@@ -72,9 +55,9 @@ class CodeReviewerAgent(BaseAgent):
             system_prompt=CODE_REVIEWER_PROMPT,
             model=model,
             memory=memory,
+            tools=get_file_tools(),
         )
 
-        self.file_tools = FileTools()
         message_bus.subscribe(self.name, self._handle_message)
 
     def _handle_message(self, message: Message) -> None:
@@ -104,17 +87,3 @@ class CodeReviewerAgent(BaseAgent):
             content=payload.model_dump(),
         )
         message_bus.publish_sync(message)
-
-    def review_code(self, code_content: str, file_path: str = "") -> str:
-        prompt = f"""请评审以下代码：
-
-【文件路径】{file_path}
-
-【代码内容】
-{code_content}
-
-请输出完整的代码评审报告。"""
-        return self.invoke(prompt)
-
-    def save_report(self, content: str, file_path: str) -> bool:
-        return self.file_tools.write_file(file_path, content)

@@ -1,7 +1,7 @@
 """UI 设计师 Agent - 界面设计"""
 from typing import Optional
 from src.agents.base_agent import BaseAgent
-from src.tools import FileTools
+from src.tools.file_tools import get_file_tools
 from src.mcp import message_bus, Message, MessageType, TaskPayload, ResponsePayload
 
 
@@ -17,7 +17,7 @@ UI_DESIGNER_PROMPT = """你是资深 UI 设计师，负责用户界面设计。
 1. 理解设计需求
 2. 确认平台和技术栈
 3. 设计界面方案
-4. 输出设计文档
+4. 使用 write_file 保存设计文档
 
 重要原则：
 - 根据用户指定的平台设计（Web、移动端、桌面端等）
@@ -30,43 +30,12 @@ UI_DESIGNER_PROMPT = """你是资深 UI 设计师，负责用户界面设计。
 - 桌面端：Electron、Tauri、WPF、WinUI
 - 小程序：微信、支付宝、抖音
 
-设计输出：
-- 布局结构
-- 组件规范
-- 颜色方案
-- 字体规范
-- 间距规范
-- 交互说明
-
 可用工具：
-- read_file: 读取现有设计或代码
-- write_file: 创建设计文档
-- list_directory: 查看项目结构
+- read_file(file_path): 读取现有设计或代码
+- write_file(file_path, content): 创建设计文档
+- list_directory(dir_path): 查看项目结构
 
-输出格式：
-```
-# UI 设计文档
-
-## 1. 设计概述
-- 设计目标
-- 目标用户
-- 设计风格
-
-## 2. 页面结构
-- 页面列表
-- 导航结构
-- 信息架构
-
-## 3. 视觉规范
-### 3.1 颜色
-### 3.2 字体
-### 3.3 图标
-### 3.4 间距
-
-## 4. 组件设计
-## 5. 交互说明
-## 6. 响应式适配
-```
+重要：设计文档使用 write_file 工具写入文件！
 
 注意：
 - 不要预设平台，根据用户需求判断
@@ -83,9 +52,9 @@ class UIDesignerAgent(BaseAgent):
             system_prompt=UI_DESIGNER_PROMPT,
             model=model,
             memory=memory,
+            tools=get_file_tools(),
         )
 
-        self.file_tools = FileTools()
         message_bus.subscribe(self.name, self._handle_message)
 
     def _handle_message(self, message: Message) -> None:
@@ -115,15 +84,3 @@ class UIDesignerAgent(BaseAgent):
             content=payload.model_dump(),
         )
         message_bus.publish_sync(message)
-
-    def design_ui(self, requirement: str) -> str:
-        prompt = f"""请根据以下需求设计 UI：
-
-【需求描述】
-{requirement}
-
-请输出完整的 UI 设计文档。"""
-        return self.invoke(prompt)
-
-    def save_design(self, content: str, file_path: str) -> bool:
-        return self.file_tools.write_file(file_path, content)

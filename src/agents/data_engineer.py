@@ -1,7 +1,7 @@
 """数据工程师 Agent - 数据库设计"""
 from typing import Optional
 from src.agents.base_agent import BaseAgent
-from src.tools import FileTools
+from src.tools.file_tools import get_file_tools
 from src.mcp import message_bus, Message, MessageType, TaskPayload, ResponsePayload
 
 
@@ -17,11 +17,11 @@ DATA_ENGINEER_PROMPT = """你是资深数据工程师，负责数据库设计和
 1. 理解数据需求
 2. 确认数据库类型
 3. 设计数据模型
-4. 输出数据库设计文档
+4. 使用 write_file 保存数据库设计文档
 
 重要原则：
 - 根据用户指定的数据库类型设计
-- 如果用户未指定，主动询问或根据项目文件判断
+- 如果用户未指定，主动询问或使用 read_file 读取项目文件判断
 - 支持任意类型的数据库
 
 支持的数据库：
@@ -33,32 +33,11 @@ DATA_ENGINEER_PROMPT = """你是资深数据工程师，负责数据库设计和
 - 图数据库：Neo4j
 
 可用工具：
-- read_file: 读取现有设计或代码
-- write_file: 创建数据库设计文档
-- list_directory: 查看项目结构
+- read_file(file_path): 读取现有设计或代码
+- write_file(file_path, content): 创建数据库设计文档
+- list_directory(dir_path): 查看项目结构
 
-输出格式：
-```
-# 数据库设计文档
-
-## 1. 数据库概述
-- 数据库类型
-- 版本要求
-- 连接配置
-
-## 2. 数据模型
-- ER 图（文字描述）
-- 实体关系
-
-## 3. 表结构设计
-### 3.1 表名
-| 字段名 | 类型 | 约束 | 说明 |
-|--------|------|------|------|
-
-## 4. 索引设计
-## 5. 查询优化建议
-## 6. 数据迁移脚本
-```
+重要：数据库设计文档使用 write_file 工具写入文件！
 
 注意：
 - 不要预设数据库类型，根据用户需求判断
@@ -75,9 +54,9 @@ class DataEngineerAgent(BaseAgent):
             system_prompt=DATA_ENGINEER_PROMPT,
             model=model,
             memory=memory,
+            tools=get_file_tools(),
         )
 
-        self.file_tools = FileTools()
         message_bus.subscribe(self.name, self._handle_message)
 
     def _handle_message(self, message: Message) -> None:
@@ -107,15 +86,3 @@ class DataEngineerAgent(BaseAgent):
             content=payload.model_dump(),
         )
         message_bus.publish_sync(message)
-
-    def design_database(self, requirement: str) -> str:
-        prompt = f"""请根据以下需求设计数据库：
-
-【需求描述】
-{requirement}
-
-请输出完整的数据库设计文档。"""
-        return self.invoke(prompt)
-
-    def save_design(self, content: str, file_path: str) -> bool:
-        return self.file_tools.write_file(file_path, content)

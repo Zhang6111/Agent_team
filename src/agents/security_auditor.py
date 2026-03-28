@@ -1,7 +1,7 @@
 """安全审计 Agent - 安全漏洞扫描"""
 from typing import Optional
 from src.agents.base_agent import BaseAgent
-from src.tools import FileTools
+from src.tools.file_tools import get_file_tools
 from src.mcp import message_bus, Message, MessageType, TaskPayload, ResponsePayload
 
 
@@ -16,8 +16,8 @@ SECURITY_AUDITOR_PROMPT = """你是资深安全审计专家，负责发现和修
 工作流程：
 1. 理解需要审计的代码
 2. 确认编程语言和框架
-3. 进行安全审查
-4. 输出审计报告
+3. 使用 read_file 读取代码
+4. 使用 write_file 保存审计报告
 
 重要原则：
 - 根据用户指定的编程语言进行审计
@@ -33,34 +33,11 @@ SECURITY_AUDITOR_PROMPT = """你是资深安全审计专家，负责发现和修
 - 业务安全：逻辑漏洞、数据校验
 
 可用工具：
-- read_file: 读取被审计代码
-- write_file: 创建审计报告
-- list_directory: 查看项目结构
+- read_file(file_path): 读取被审计代码
+- write_file(file_path, content): 创建审计报告
+- list_directory(dir_path): 查看项目结构
 
-输出格式：
-```
-# 安全审计报告
-
-## 1. 审计概述
-- 审计范围
-- 审计时间
-- 风险等级统计
-
-## 2. 漏洞列表
-| 编号 | 级别 | 类型 | 位置 | 描述 | 修复建议 |
-|------|------|------|------|------|----------|
-| V001 | 高危 | SQL注入 | xxx:10 | ... | ... |
-
-## 3. 详细说明
-### V001: SQL 注入漏洞
-- 漏洞描述
-- 危害分析
-- 修复方案
-- 修复代码
-
-## 4. 安全建议
-## 5. 总结
-```
+重要：审计报告使用 write_file 工具写入文件！
 
 注意：
 - 不要预设编程语言，根据代码内容判断
@@ -78,9 +55,9 @@ class SecurityAuditorAgent(BaseAgent):
             system_prompt=SECURITY_AUDITOR_PROMPT,
             model=model,
             memory=memory,
+            tools=get_file_tools(),
         )
 
-        self.file_tools = FileTools()
         message_bus.subscribe(self.name, self._handle_message)
 
     def _handle_message(self, message: Message) -> None:
@@ -110,17 +87,3 @@ class SecurityAuditorAgent(BaseAgent):
             content=payload.model_dump(),
         )
         message_bus.publish_sync(message)
-
-    def audit_code(self, code_content: str, file_path: str = "") -> str:
-        prompt = f"""请对以下代码进行安全审计：
-
-【文件路径】{file_path}
-
-【代码内容】
-{code_content}
-
-请输出完整的安全审计报告。"""
-        return self.invoke(prompt)
-
-    def save_report(self, content: str, file_path: str) -> bool:
-        return self.file_tools.write_file(file_path, content)
